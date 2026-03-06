@@ -1,0 +1,100 @@
+name: Nightly Build and Release
+
+on:
+  push:
+    branches:
+      - 'main'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: macos-26
+
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for recent commits and skip if none
+        run: |
+          if [ -z "$(git rev-list -n 1 HEAD --since='24 hours ago')" ]; then
+            echo "No commits in the last 24 hours, skipping build."
+            exit 0
+          else
+            echo "Commits detected, proceeding with build."
+          fi
+  
+      - name: Install create-dmg
+        run: |
+          brew update
+          brew install create-dmg
+
+      - name: Build App
+        run: |
+          xcodebuild -scheme "WidgetPortingAPP" \
+                     -configuration Release \
+                     -destination "platform=macOS" \
+                     ARCHS="arm64 x86_64" \
+                     ONLY_ACTIVE_ARCH=NO \
+                     BUILD_DIR=build \
+                     PRODUCT_NAME="Widget Porting Toolkit" \
+                     clean build
+
+      - name: Package DMG
+        run: |
+          create-dmg \
+            --volname "Widget Porting Toolkit" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 128 \
+            --icon "Widget Porting Toolkit.app" 150 200 \
+            --hide-extension "Widget Porting Toolkit.app" \
+            --app-drop-link 450 200 \
+            --background ".github/assets/dmg-background.png" \
+            "build/Release/Widget Porting Toolkit.dmg" \
+            "build/Release/Widget Porting Toolkit.app"
+
+      - name: Generate DMG SHA256 Hash
+        run: |
+          shasum -a 256 "build/Release/Widget Porting Toolkit.dmg" | awk '{print $1}' > dmg_hash.txt
+          echo "DMG_HASH=$(cat dmg_hash.txt)" >> $GITHUB_ENV
+
+      - name: Nightly release
+        id: release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nightly
+          name: Nightly
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ env.GH_TOKEN }}
+      
+      - name: Delete existing DMG asset
+        run: gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+
+      - name: Upload DMG to release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nightly
+          files: build/Release/Widget Porting Toolkit.dmg
+        env:
+          GITHUB_TOKEN: ${{ env.GH_TOKEN }}
+
+
+      - name: Update Nightly release description
+        run: |
+          gh release edit nightly \
+            --title "Nightly Build" \
+            --notes "This is an automated nightly build from the latest main branch. For the latest source code, go to the repository and select Code > Download ZIP.
+            
+          Commit: $(git rev-parse --short HEAD)
+          Built at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          DMG SHA256 Hash: \`$DMG_HASH\`"
+        env:
+          GH_TOKEN: ${{ env.GH_TOKEN }}
+
