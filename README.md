@@ -26,7 +26,7 @@
   •
   <a href="https://widgets.nikolan.net/qsg.html">Quick Start Guide</a>
   •
-  <s>Blog Post</s> (Coming Soon)
+  <a href="https://blog.nikolan.net/posts/dashboard-widgets/">Blog Post</a>
 </p>
 
 <p align="center">This is a side project made in my free time to learn Swift. Parts of the code are messy. Contributions always welcome.</p>
