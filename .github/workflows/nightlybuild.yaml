@@ -73,6 +73,7 @@ jobs:
           GITHUB_TOKEN: ${{ env.GH_TOKEN }}
       
       - name: Delete existing DMG asset
+        continue-on-error: true
         run: gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
