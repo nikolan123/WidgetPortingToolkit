@@ -79,7 +79,7 @@ jobs:
         continue-on-error: true
         run: gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
 
       - name: Upload DMG to release
         uses: softprops/action-gh-release@v1
