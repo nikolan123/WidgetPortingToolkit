@@ -15,6 +15,7 @@ jobs:
 
     env:
       GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
 
     steps:
       - name: Checkout repository
@@ -72,23 +73,16 @@ jobs:
           name: Nightly
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
       
       - name: Delete existing DMG asset
         continue-on-error: true
-        run: |
-          gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
+        run: gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
 
       - name: Upload DMG to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: nightly
           files: build/Release/Widget Porting Toolkit.dmg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
 
       - name: Update Nightly release description
         run: |
@@ -99,5 +93,3 @@ jobs:
           Commit: $(git rev-parse --short HEAD)
           Built at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
           DMG SHA256 Hash: \`$DMG_HASH\`"
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
