@@ -6,12 +6,12 @@ on:
       - 'main'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-release:
     runs-on: macos-26
-
-    env:
-      GH_TOKEN: ${{ secrets.GH_TOKEN_FINE }}
 
     steps:
       - name: Checkout repository
@@ -77,7 +77,7 @@ jobs:
           draft: false
           prerelease: false
         env:
-          GITHUB_TOKEN: ${{ env.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Clean existing assets
         continue-on-error: true
@@ -85,7 +85,7 @@ jobs:
           gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes || true
           gh release delete-asset nightly "Widget.Porting.Toolkit.zip" --yes || true
         env:
-          GH_TOKEN: ${{ env.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Assets to release
         uses: softprops/action-gh-release@v1
@@ -95,7 +95,7 @@ jobs:
             build/Release/Widget Porting Toolkit.dmg
             build/Release/Widget Porting Toolkit.zip
         env:
-          GITHUB_TOKEN: ${{ env.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Nightly release description
         run: |
@@ -110,4 +110,4 @@ jobs:
           * **DMG SHA256:** \`$DMG_HASH\`
           * **ZIP SHA256:** \`$ZIP_HASH\`"
         env:
-          GH_TOKEN: ${{ env.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
