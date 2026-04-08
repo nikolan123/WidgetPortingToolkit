@@ -56,10 +56,17 @@ jobs:
             "build/Release/Widget Porting Toolkit.dmg" \
             "build/Release/Widget Porting Toolkit.app"
 
-      - name: Generate DMG SHA256 Hash
+      - name: Package ZIP
         run: |
-          shasum -a 256 "build/Release/Widget Porting Toolkit.dmg" | awk '{print $1}' > dmg_hash.txt
-          echo "DMG_HASH=$(cat dmg_hash.txt)" >> $GITHUB_ENV
+          cd build/Release
+          zip -r "Widget Porting Toolkit.zip" "Widget Porting Toolkit.app"
+
+      - name: Generate Hashes
+        run: |
+          DMG_HASH=$(shasum -a 256 "build/Release/Widget Porting Toolkit.dmg" | awk '{print $1}')
+          ZIP_HASH=$(shasum -a 256 "build/Release/Widget Porting Toolkit.zip" | awk '{print $1}')
+          echo "DMG_HASH=$DMG_HASH" >> $GITHUB_ENV
+          echo "ZIP_HASH=$ZIP_HASH" >> $GITHUB_ENV
 
       - name: Nightly release
         id: release
@@ -72,29 +79,35 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.GH_TOKEN }}
       
-      - name: Delete existing DMG asset
+      - name: Clean existing assets
         continue-on-error: true
-        run: gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes
+        run: |
+          gh release delete-asset nightly "Widget.Porting.Toolkit.dmg" --yes || true
+          gh release delete-asset nightly "Widget.Porting.Toolkit.zip" --yes || true
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
 
-      - name: Upload DMG to release
+      - name: Upload Assets to release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: nightly
-          files: build/Release/Widget Porting Toolkit.dmg
+          files: |
+            build/Release/Widget Porting Toolkit.dmg
+            build/Release/Widget Porting Toolkit.zip
         env:
           GITHUB_TOKEN: ${{ env.GH_TOKEN }}
-
 
       - name: Update Nightly release description
         run: |
           gh release edit nightly \
             --title "Nightly Build" \
-            --notes "This is an automated nightly build from the latest main branch. For the latest source code, go to the repository and select Code > Download ZIP.
+            --notes "This is an automated nightly build from the latest main branch.
             
-          Commit: $(git rev-parse --short HEAD)
-          Built at: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
-          DMG SHA256 Hash: \`$DMG_HASH\`"
+          **Commit:** $(git rev-parse --short HEAD)
+          **Built at:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          **Hashes:**
+          * **DMG SHA256:** \`$DMG_HASH\`
+          * **ZIP SHA256:** \`$ZIP_HASH\`"
         env:
           GH_TOKEN: ${{ env.GH_TOKEN }}
