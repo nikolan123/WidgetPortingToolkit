@@ -11,7 +11,6 @@ import Security
 
 struct WidgetMetadata {
     let title: String
-    let status: String
     let details: String
     let icon: NSImage?
 }
@@ -46,7 +45,6 @@ final class WidgetMetadataDecoder {
 
         return WidgetMetadata(
             title: displayName,
-            status: "Dashboard Widget Package",
             details: details,
             icon: loadIcon(for: url, infoDict: infoDict)
         )
