@@ -9,6 +9,8 @@ import Cocoa
 import Quartz
 
 class PreviewViewController: NSViewController, QLPreviewingController {
+    private let appIconImageView = NSImageView()
+    private let bannerTitleLabel = NSTextField(labelWithString: "Widget Porting Toolkit")
     private let iconImageView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "Widget")
     private let detailsLabel = NSTextField(labelWithString: "")
@@ -42,16 +44,36 @@ class PreviewViewController: NSViewController, QLPreviewingController {
     private func configureUI() {
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.clear.cgColor
-        preferredContentSize = NSSize(width: 640, height: 220)
+        preferredContentSize = NSSize(width: 700, height: 250)
 
-        let root = NSStackView()
-        root.translatesAutoresizingMaskIntoConstraints = false
-        root.orientation = .horizontal
-        root.alignment = .top
-        root.spacing = 20
-        root.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
-        root.wantsLayer = true
-        root.layer?.backgroundColor = NSColor.clear.cgColor
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+
+        appIconImageView.translatesAutoresizingMaskIntoConstraints = false
+        appIconImageView.imageScaling = .scaleProportionallyUpOrDown
+        appIconImageView.image = hostAppIcon()
+        NSLayoutConstraint.activate([
+            appIconImageView.widthAnchor.constraint(equalToConstant: 20),
+            appIconImageView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+
+        bannerTitleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
+        bannerTitleLabel.lineBreakMode = .byTruncatingTail
+
+        let banner = NSStackView(views: [appIconImageView, bannerTitleLabel])
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        banner.orientation = .horizontal
+        banner.alignment = .centerY
+        banner.spacing = 8
+        banner.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        banner.wantsLayer = true
+        banner.layer?.backgroundColor = NSColor.clear.cgColor
+
+        let content = NSStackView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        content.orientation = .horizontal
+        content.alignment = .top
+        content.spacing = 20
 
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
         iconImageView.imageScaling = .scaleProportionallyUpOrDown
@@ -75,17 +97,51 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         right.alignment = .leading
         right.spacing = 8
 
-        root.addArrangedSubview(iconImageView)
-        root.addArrangedSubview(right)
+        content.addArrangedSubview(iconImageView)
+        content.addArrangedSubview(right)
         right.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        view.addSubview(root)
+        container.addSubview(banner)
+        container.addSubview(content)
+
+        let bannerBottomBorder = NSView()
+        bannerBottomBorder.translatesAutoresizingMaskIntoConstraints = false
+        bannerBottomBorder.wantsLayer = true
+        bannerBottomBorder.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor
+        container.addSubview(bannerBottomBorder)
+
         NSLayoutConstraint.activate([
-            root.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            root.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            root.topAnchor.constraint(equalTo: view.topAnchor),
-            root.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            banner.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            banner.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            banner.topAnchor.constraint(equalTo: container.topAnchor),
+            banner.heightAnchor.constraint(equalToConstant: 32),
+            bannerBottomBorder.leadingAnchor.constraint(equalTo: banner.leadingAnchor),
+            bannerBottomBorder.trailingAnchor.constraint(equalTo: banner.trailingAnchor),
+            bannerBottomBorder.topAnchor.constraint(equalTo: banner.bottomAnchor),
+            bannerBottomBorder.heightAnchor.constraint(equalToConstant: 1),
+
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 24),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -24),
+            content.topAnchor.constraint(equalTo: bannerBottomBorder.bottomAnchor, constant: 16),
+            content.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20)
         ])
+
+        view.addSubview(container)
+        NSLayoutConstraint.activate([
+            container.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            container.topAnchor.constraint(equalTo: view.topAnchor),
+            container.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func hostAppIcon() -> NSImage? {
+        let extensionBundleURL = Bundle.main.bundleURL
+        let appBundleURL = extensionBundleURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        return NSWorkspace.shared.icon(forFile: appBundleURL.path)
     }
 
     @MainActor
