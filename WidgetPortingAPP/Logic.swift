@@ -348,6 +348,21 @@ class WidgetManager: ObservableObject {
         window.makeKeyAndOrderFront(nil)
         window.level = .floating
     }
+    
+    func handleOpenedWidgetURL(_ folderURL: URL) {
+        guard folderURL.lastPathComponent != "-NSDocumentRevisionsDebugMode" else { return } // xcode temp dir
+        guard folderURL.pathExtension.lowercased() == "wdgt" else { return }
+        
+        if silentMode {
+            if portableMode {
+                loadWidget(from: folderURL, openWindow: autoOpenWidgetOnInstall)
+            } else if let (dest, shortUUID) = installWidget(from: folderURL) {
+                loadWidget(from: dest, openWindow: autoOpenWidgetOnInstall, id: shortUUID)
+            }
+        } else if let info = parsePlist(from: folderURL, showError: showError) {
+            openInstallWindow(with: info, folderURL: folderURL)
+        }
+    }
 
     // MARK: - Drop handling
     func handleDrop(providers: [NSItemProvider]) -> Bool {
@@ -359,23 +374,8 @@ class WidgetManager: ObservableObject {
                     guard let data = item as? Data,
                           let folderURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
-                    // Install widget into app container then load it
                     Task { @MainActor in
-                        guard folderURL.lastPathComponent != "-NSDocumentRevisionsDebugMode" else { return } // xcode shit
-                        
-                        if self.silentMode {
-                            if self.portableMode {
-                                self.loadWidget(from: folderURL, openWindow: self.autoOpenWidgetOnInstall)
-                            } else {
-                                if let (dest, shortUUID) = self.installWidget(from: folderURL) {
-                                    self.loadWidget(from: dest, openWindow: self.autoOpenWidgetOnInstall, id: shortUUID)
-                                }
-                            }
-                        } else {
-                            if let info = parsePlist(from: folderURL, showError: self.showError)  {
-                                self.openInstallWindow(with: info, folderURL: folderURL)
-                            }
-                        }
+                        self.handleOpenedWidgetURL(folderURL)
                     }
                 }
                 handled = true
@@ -783,4 +783,3 @@ class WidgetManager: ObservableObject {
         alert.runModal()
     }
 }
-

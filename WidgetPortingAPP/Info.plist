@@ -13,7 +13,7 @@
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
 			<array>
-				<string>com.niko.widgetportingapp.wdgt</string>
+				<string>com.apple.dashboard-widget</string>
 			</array>
 			<key>LSTypeIsPackage</key>
 			<true/>
@@ -26,7 +26,7 @@
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>This permission is required to switch to the next desktop.</string>
-	<key>UTExportedTypeDeclarations</key>
+	<key>UTImportedTypeDeclarations</key>
 	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>
@@ -36,7 +36,7 @@
 			<key>UTTypeDescription</key>
 			<string>Dashboard Widget</string>
 			<key>UTTypeIdentifier</key>
-			<string>com.niko.widgetportingapp.wdgt</string>
+			<string>com.apple.dashboard-widget</string>
 			<key>UTTypeTagSpecification</key>
 			<dict>
 				<key>public.filename-extension</key>
