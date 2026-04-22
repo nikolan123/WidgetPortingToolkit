@@ -70,14 +70,14 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let banner = NSStackView(views: [appIconImageView, bannerTitleLabel, spacer, creditLabel])
-        banner.translatesAutoresizingMaskIntoConstraints = false
-        banner.orientation = .horizontal
-        banner.alignment = .centerY
-        banner.spacing = 8
-        banner.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
-        banner.wantsLayer = true
-        banner.layer?.backgroundColor = NSColor.clear.cgColor
+        let footer = NSStackView(views: [appIconImageView, bannerTitleLabel, spacer, creditLabel])
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        footer.orientation = .horizontal
+        footer.alignment = .centerY
+        footer.spacing = 8
+        footer.edgeInsets = NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12)
+        footer.wantsLayer = true
+        footer.layer?.backgroundColor = NSColor.clear.cgColor
 
         let content = NSStackView()
         content.translatesAutoresizingMaskIntoConstraints = false
@@ -111,29 +111,29 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         content.addArrangedSubview(right)
         right.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        container.addSubview(banner)
         container.addSubview(content)
+        container.addSubview(footer)
 
-        let bannerBottomBorder = NSView()
-        bannerBottomBorder.translatesAutoresizingMaskIntoConstraints = false
-        bannerBottomBorder.wantsLayer = true
-        bannerBottomBorder.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor
-        container.addSubview(bannerBottomBorder)
+        let footerTopBorder = NSView()
+        footerTopBorder.translatesAutoresizingMaskIntoConstraints = false
+        footerTopBorder.wantsLayer = true
+        footerTopBorder.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor
+        container.addSubview(footerTopBorder)
 
         NSLayoutConstraint.activate([
-            banner.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            banner.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            banner.topAnchor.constraint(equalTo: container.topAnchor),
-            banner.heightAnchor.constraint(equalToConstant: 32),
-            bannerBottomBorder.leadingAnchor.constraint(equalTo: banner.leadingAnchor),
-            bannerBottomBorder.trailingAnchor.constraint(equalTo: banner.trailingAnchor),
-            bannerBottomBorder.topAnchor.constraint(equalTo: banner.bottomAnchor),
-            bannerBottomBorder.heightAnchor.constraint(equalToConstant: 1),
+            footer.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            footer.heightAnchor.constraint(equalToConstant: 32),
+            footerTopBorder.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
+            footerTopBorder.trailingAnchor.constraint(equalTo: footer.trailingAnchor),
+            footerTopBorder.bottomAnchor.constraint(equalTo: footer.topAnchor),
+            footerTopBorder.heightAnchor.constraint(equalToConstant: 1),
 
             content.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 24),
             content.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -24),
-            content.topAnchor.constraint(equalTo: bannerBottomBorder.bottomAnchor, constant: 16),
-            content.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -20)
+            content.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+            content.bottomAnchor.constraint(equalTo: footerTopBorder.topAnchor, constant: -20)
         ])
 
         view.addSubview(container)
