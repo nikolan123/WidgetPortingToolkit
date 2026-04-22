@@ -33,13 +33,12 @@ jobs:
 
       - name: Build App
         run: |
-          xcodebuild -scheme "WidgetPortingAPP" \
+          xcodebuild -scheme "Widget Porting Toolkit" \
                      -configuration Release \
                      -destination "platform=macOS" \
                      ARCHS="arm64 x86_64" \
                      ONLY_ACTIVE_ARCH=NO \
                      BUILD_DIR=build \
-                     PRODUCT_NAME="Widget Porting Toolkit" \
                      clean build
 
       - name: Package DMG

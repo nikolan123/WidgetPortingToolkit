@@ -42,7 +42,7 @@
 		237BD6EC2E6EF3EF008AD8A6 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		23D4813D2F983B5A008E756A /* Quartz.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Quartz.framework; path = System/Library/Frameworks/Quartz.framework; sourceTree = SDKROOT; };
-		23DF79E12E6DEC0B007D5A01 /* WidgetPortingAPP.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WidgetPortingAPP.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		23DF79E12E6DEC0B007D5A01 /* Widget Porting Toolkit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Widget Porting Toolkit.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -123,7 +123,7 @@
 		23DF79E22E6DEC0B007D5A01 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				23DF79E12E6DEC0B007D5A01 /* WidgetPortingAPP.app */,
+				23DF79E12E6DEC0B007D5A01 /* Widget Porting Toolkit.app */,
 				23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */,
 			);
 			name = Products;
@@ -154,9 +154,9 @@
 			productReference = 23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		23DF79E02E6DEC0B007D5A01 /* WidgetPortingAPP */ = {
+		23DF79E02E6DEC0B007D5A01 /* Widget Porting Toolkit */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 23DF79ED2E6DEC0C007D5A01 /* Build configuration list for PBXNativeTarget "WidgetPortingAPP" */;
+			buildConfigurationList = 23DF79ED2E6DEC0C007D5A01 /* Build configuration list for PBXNativeTarget "Widget Porting Toolkit" */;
 			buildPhases = (
 				23A7F11A2EE6374100274BFF /* Add Commit Hash to Info.plist */,
 				23DF79DD2E6DEC0B007D5A01 /* Sources */,
@@ -173,11 +173,11 @@
 			fileSystemSynchronizedGroups = (
 				23DF79E32E6DEC0B007D5A01 /* WidgetPortingAPP */,
 			);
-			name = WidgetPortingAPP;
+			name = "Widget Porting Toolkit";
 			packageProductDependencies = (
 			);
-			productName = WidgetPortingAPP;
-			productReference = 23DF79E12E6DEC0B007D5A01 /* WidgetPortingAPP.app */;
+			productName = "Widget Porting Toolkit";
+			productReference = 23DF79E12E6DEC0B007D5A01 /* Widget Porting Toolkit.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -212,7 +212,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				23DF79E02E6DEC0B007D5A01 /* WidgetPortingAPP */,
+				23DF79E02E6DEC0B007D5A01 /* Widget Porting Toolkit */,
 				23D4813A2F983B5A008E756A /* WidgetQuickLook */,
 			);
 		};
@@ -323,6 +323,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPortingAPP.WidgetQuickLook;
+				PRODUCT_MODULE_NAME = WidgetQuickLook;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -352,6 +353,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPortingAPP.WidgetQuickLook;
+				PRODUCT_MODULE_NAME = WidgetQuickLook;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -498,6 +500,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WidgetPortingAPP/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Widget Porting Toolkit";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -506,7 +509,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPortingAPP;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = WidgetPortingToolkit;
+				PRODUCT_NAME = "Widget Porting Toolkit";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -529,6 +533,7 @@
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WidgetPortingAPP/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Widget Porting Toolkit";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -537,7 +542,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 12.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPortingAPP;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = WidgetPortingToolkit;
+				PRODUCT_NAME = "Widget Porting Toolkit";
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -565,7 +571,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		23DF79ED2E6DEC0C007D5A01 /* Build configuration list for PBXNativeTarget "WidgetPortingAPP" */ = {
+		23DF79ED2E6DEC0C007D5A01 /* Build configuration list for PBXNativeTarget "Widget Porting Toolkit" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				23DF79EE2E6DEC0C007D5A01 /* Debug */,
