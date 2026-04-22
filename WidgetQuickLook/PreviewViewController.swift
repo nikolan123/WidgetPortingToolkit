@@ -117,7 +117,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let footerTopBorder = NSView()
         footerTopBorder.translatesAutoresizingMaskIntoConstraints = false
         footerTopBorder.wantsLayer = true
-        footerTopBorder.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.35).cgColor
+        footerTopBorder.layer?.backgroundColor = NSColor(
+            calibratedRed: 0.83,
+            green: 0.34,
+            blue: 0.78,
+            alpha: 0.35
+        ).cgColor
         container.addSubview(footerTopBorder)
 
         NSLayoutConstraint.activate([
