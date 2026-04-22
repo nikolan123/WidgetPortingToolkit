@@ -56,15 +56,6 @@ struct SplashScreenView: View {
 }
 
 #if DEBUG
-final class MockWidgetManager: WidgetManager {
-    override init() {
-        super.init()
-        self.loadingProgressDenominator = 10
-        self.loadingProgressNumerator = 4
-        self.currentLoadingWidgetName = "Weather Widget"
-    }
-}
-
 #Preview {
     SplashScreenView()
         .environmentObject({

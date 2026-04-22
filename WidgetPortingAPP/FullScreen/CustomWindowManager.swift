@@ -157,8 +157,6 @@ struct CustomWindowView: View {
     let onClose: (UUID) -> Void
     let onFocus: (CustomWindow) -> Void
     
-    @AppStorage("borderlessFullScreenWidgets") var borderlessFullScreenWidgets: Bool = true
-    
     @State private var isCloseHovered = false
     
     // Overlay state
@@ -173,7 +171,7 @@ struct CustomWindowView: View {
             // Main Content
             VStack(spacing: 0) {
                 // MARK: Title Bar
-                if !borderlessFullScreenWidgets {
+                if !widgetManager.borderlessFullScreenWidgets {
                     HStack {
                         Text(window.appInfo.displayName)
                             .font(.system(size: 13))
@@ -269,7 +267,10 @@ struct CustomWindowView: View {
                         widgetManager.resizeWindow(for: window.appInfo, width: window.size.width, height: window.size.height)
                     }
                 )
-                .frame(width: window.size.width, height: borderlessFullScreenWidgets ? window.size.height : window.size.height + 28)
+                .frame(
+                    width: window.size.width,
+                    height: widgetManager.borderlessFullScreenWidgets ? window.size.height : window.size.height + 28
+                )
                 .transition(.opacity)
             }
         }

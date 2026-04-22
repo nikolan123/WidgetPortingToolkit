@@ -126,7 +126,7 @@ struct OOBECoordinatorView: View {
     
     private func closeWindow() {
         // Mark OOBE as completed
-        UserDefaults.standard.set(true, forKey: "hasCompletedOOBE")
+        manager.hasCompletedOOBE = true
         
         if let w = NSApp.keyWindow {
             w.close()

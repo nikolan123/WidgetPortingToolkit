@@ -165,7 +165,7 @@ struct InstallWindow: View {
 }
 
 struct DefaultLanguagePopup: View {
-    @AppStorage("defaultWidgetLanguage") var defaultWidgetLanguage: String = ""
+    @EnvironmentObject var manager: WidgetManager
     @Environment(\.presentationMode) private var presentationMode
     
     private var backgroundImage: NSImage? {
@@ -186,7 +186,7 @@ struct DefaultLanguagePopup: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Set Global Default Widget Language").font(.headline)
                 HStack {
-                    TextField("Default Language", text: $defaultWidgetLanguage)
+                    TextField("Default Language", text: $manager.defaultWidgetLanguage)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                     Text(".lproj")
                 }
@@ -221,4 +221,5 @@ struct DefaultLanguagePopup: View {
 
 #Preview {
     DefaultLanguagePopup()
+        .environmentObject(WidgetManager())
 }

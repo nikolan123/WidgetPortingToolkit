@@ -9,17 +9,13 @@ import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
-    let widgetManager = WidgetManager()
+    let widgetManager = WidgetManager.shared
     private var mainWindow: NSWindow?
     private var openedWidgetDuringLaunch = false
     private var hasPresentedMainWindow = false
     
     private var hasCompletedOOBE: Bool {
-        UserDefaults.standard.bool(forKey: "hasCompletedOOBE")
-    }
-    
-    private var defaultLaunchFullScreen: Bool {
-        UserDefaults.standard.bool(forKey: "defaultLaunchFullScreen")
+        widgetManager.hasCompletedOOBE
     }
     
     private func isWidgetURL(_ url: URL) -> Bool {
@@ -69,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                 self.widgetManager.openOOBEWindow()
             }
-        } else if defaultLaunchFullScreen {
+        } else if widgetManager.defaultLaunchFullScreen {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 guard !window.styleMask.contains(.fullScreen) else { return }
                 window.toggleFullScreen(nil)
@@ -116,19 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 @main
 struct WidgetPortingAPPApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @AppStorage("defaultLaunchFullScreen") var defaultLaunchFullScreen: Bool = false
-    @AppStorage("borderlessFullScreenWidgets") var borderlessFullScreenWidgets: Bool = true
-    
-    private var widgetManager: WidgetManager {
-        appDelegate.widgetManager
-    }
-    
-    private func boolBinding(_ keyPath: ReferenceWritableKeyPath<WidgetManager, Bool>) -> Binding<Bool> {
-        Binding(
-            get: { widgetManager[keyPath: keyPath] },
-            set: { widgetManager[keyPath: keyPath] = $0 }
-        )
-    }
+    @StateObject private var widgetManager = WidgetManager.shared
 
     var body: some Scene {
         Settings {
@@ -141,18 +125,21 @@ struct WidgetPortingAPPApp: App {
                 }
                 .keyboardShortcut(",", modifiers: [.command])
             }
+
+            CommandGroup(replacing: .appSettings) {
+            }
             
             CommandMenu("Options") {
-                Toggle("Silent Mode", isOn: boolBinding(\.silentMode))
-                Toggle("Auto Open Widget on Install", isOn: boolBinding(\.autoOpenWidgetOnInstall))
-                Toggle("Don't Copy Widgets", isOn: boolBinding(\.portableMode))
+                Toggle("Silent Mode", isOn: $widgetManager.silentMode)
+                Toggle("Auto Open Widget on Install", isOn: $widgetManager.autoOpenWidgetOnInstall)
+                Toggle("Don't Copy Widgets", isOn: $widgetManager.portableMode)
                     .disabled(!widgetManager.silentMode)
                 
                 Divider()
 
-                Toggle("Launch in Full Screen by Default", isOn: $defaultLaunchFullScreen)
-                Toggle("Borderless Widgets", isOn: $borderlessFullScreenWidgets)
-                Toggle("Allow multiple instances of the same widget", isOn: boolBinding(\.allowMultipleInstances))
+                Toggle("Launch in Full Screen by Default", isOn: $widgetManager.defaultLaunchFullScreen)
+                Toggle("Borderless Widgets", isOn: $widgetManager.borderlessFullScreenWidgets)
+                Toggle("Allow multiple instances of the same widget", isOn: $widgetManager.allowMultipleInstances)
 
                 Divider()
                 

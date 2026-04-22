@@ -9,7 +9,6 @@ import SwiftUI
 import AppKit
 
 struct AboutWindow: View {
-    @AppStorage("defaultWidgetLanguage") var defaultWidgetLanguage: String = ""
     @Environment(\.presentationMode) private var presentationMode
     
     let gitCommitShort = Bundle.main.object(forInfoDictionaryKey: "GitCommitShort") as? String ?? "Unknown"
