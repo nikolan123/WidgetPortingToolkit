@@ -829,7 +829,6 @@ class WidgetManager: ObservableObject {
     func clearPreferences(for appInfo: AppInfo) {
         let namespace = "WidgetPrefs::" + appInfo.bundleIdentifier + "_" + appInfo.id
         UserDefaults.standard.removeObject(forKey: namespace)
-        UserDefaults.standard.synchronize()
     }
     
     private func showError(_ message: String) {

@@ -183,7 +183,6 @@ struct WidgetPortingAPPApp: App {
                         // Reset UserDefaults
                         if let bundleID = Bundle.main.bundleIdentifier {
                             UserDefaults.standard.removePersistentDomain(forName: bundleID)
-                            UserDefaults.standard.synchronize()
                         }
                         
                         // Restart the app

@@ -100,14 +100,14 @@ struct CustomWindowContainer: View {
                         return existingIdentifier == windowIdentifier
                     })
                     
-                    if existingWindow != nil {
+                    if let existingWindow {
                         let alert = NSAlert()
                         alert.messageText = "Widget Already Open"
                         alert.informativeText = "A window for this widget is already open. To open multiple instances, go to Options > Allow multiple instances of the same widget."
                         alert.alertStyle = .informational
                         alert.addButton(withTitle: "OK")
                         alert.runModal()
-                        bringToFront(existingWindow!)
+                        bringToFront(existingWindow)
                         return
                     }
                 }

@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		235001B42EE6F467005CC171 /* Logo.icon in Resources */ = {isa = PBXBuildFile; fileRef = 235001B32EE6F467005CC171 /* Logo.icon */; };
 		237BD6ED2E6EF3EF008AD8A6 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 237BD6EC2E6EF3EF008AD8A6 /* README.md */; };
 		23D4813E2F983B5A008E756A /* Quartz.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 23D4813D2F983B5A008E756A /* Quartz.framework */; };
 		23D4814A2F983B5A008E756A /* WidgetQuickLook.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -230,7 +229,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				235001B42EE6F467005CC171 /* Logo.icon in Resources */,
 				237BD6ED2E6EF3EF008AD8A6 /* README.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

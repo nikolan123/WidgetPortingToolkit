@@ -169,7 +169,13 @@ OOBEWidgetResourcesContent(coordinator: OOBECoordinator())
     .environmentObject(WidgetManager())
     .frame(width: 650, height: 580)
     .background(
-        Image(nsImage: NSImage(named: "ecsb_background_tile")!)
-            .resizable(resizingMode: .tile)
+        Group {
+            if let bg = NSImage(named: "ecsb_background_tile") {
+                Image(nsImage: bg)
+                    .resizable(resizingMode: .tile)
+            } else {
+                Color.clear
+            }
+        }
     )
 }
