@@ -54,6 +54,9 @@ final class WidgetMetadataDecoder {
         let iconCandidates = [
             stringValue(infoDict["CFBundleIconFile"]),
             "Icon.icns",
+            "icon.icns",
+            "Icon.png",
+            "icon.png",
             "Default.png",
             "Default@2x.png"
         ].compactMap { $0 }
