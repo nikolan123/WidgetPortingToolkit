@@ -5,6 +5,12 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>wdgt</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>WidgetDocument</string>
 			<key>CFBundleTypeName</key>
 			<string>Dashboard Widget</string>
 			<key>CFBundleTypeRole</key>
@@ -26,7 +32,7 @@
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>This permission is required to switch to the next desktop.</string>
-	<key>UTImportedTypeDeclarations</key>
+	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
 			<key>UTTypeConformsTo</key>
