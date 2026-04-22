@@ -11,6 +11,7 @@ import Quartz
 class PreviewViewController: NSViewController, QLPreviewingController {
     private let appIconImageView = NSImageView()
     private let bannerTitleLabel = NSTextField(labelWithString: "Widget Porting Toolkit")
+    private let creditLabel = NSTextField(labelWithString: "Made by Niko")
     private let iconImageView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "Widget")
     private let detailsLabel = NSTextField(labelWithString: "")
@@ -59,8 +60,17 @@ class PreviewViewController: NSViewController, QLPreviewingController {
 
         bannerTitleLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         bannerTitleLabel.lineBreakMode = .byTruncatingTail
+        
+        creditLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        creditLabel.textColor = .secondaryLabelColor
+        creditLabel.alignment = .right
 
-        let banner = NSStackView(views: [appIconImageView, bannerTitleLabel])
+        let spacer = NSView()
+        spacer.translatesAutoresizingMaskIntoConstraints = false
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        spacer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let banner = NSStackView(views: [appIconImageView, bannerTitleLabel, spacer, creditLabel])
         banner.translatesAutoresizingMaskIntoConstraints = false
         banner.orientation = .horizontal
         banner.alignment = .centerY
