@@ -2,6 +2,7 @@ name: Manual Build Artifact
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: read
@@ -22,16 +23,17 @@ jobs:
                      ARCHS="arm64 x86_64" \
                      ONLY_ACTIVE_ARCH=NO \
                      BUILD_DIR=build \
+                     PRODUCT_NAME="Widget Porting Toolkit" \
                      clean build
 
       - name: Package ZIP
         run: |
           cd build/Release
-          zip -r "WidgetPortingAPP.zip" "WidgetPortingAPP.app"
+          zip -r "Widget Porting Toolkit.zip" "Widget Porting Toolkit.app"
 
       - name: Upload ZIP artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WidgetPortingAPP-release-zip
-          path: build/Release/WidgetPortingAPP.zip
+          name: Widget Porting Toolkit.zip
+          path: build/Release/Widget Porting Toolkit.zip
           if-no-files-found: error
