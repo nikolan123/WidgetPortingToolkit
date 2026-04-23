@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.title = "Widget Porting Toolkit"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.minSize = NSSize(width: 400, height: 180)
+        window.setContentSize(NSSize(width: 720, height: 520))
         window.center()
         window.delegate = self
         window.setFrameAutosaveName("MainWindow")
