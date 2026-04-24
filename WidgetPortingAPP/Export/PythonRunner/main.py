@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QTimer, Qt, QUrl, Slot
-from PySide6.QtGui import QDesktopServices, QImageReader, QKeySequence, QShortcut
+from PySide6.QtGui import QDesktopServices, QIcon, QImageReader, QKeySequence, QShortcut
 from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineCore import QWebEngineScript, QWebEngineSettings
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -88,6 +88,14 @@ def load_widget_config() -> tuple[Path, int, int, str]:
 
     return entry_path, width, height, widget_name
 
+def find_widget_icon(widget_dir: Path) -> Path | None:
+    """Search for a widget icon file, trying common names."""
+    candidates = ["Icon.png", "icon.png", "Icon.icns", "icon.icns"]
+    for name in candidates:
+        icon_path = widget_dir / name
+        if icon_path.exists():
+            return icon_path
+    return None
 
 class NativeBridge(QObject):
     def __init__(self, preference_store: PreferenceStore, web_view: QWebEngineView, widget_name: str) -> None:
@@ -495,6 +503,12 @@ def main() -> int:
     preference_store = PreferenceStore(PREFS_PATH)
 
     app = QApplication(sys.argv)
+
+    icon_path = find_widget_icon(WIDGET_DIR)
+    if icon_path is not None:
+        app_icon = QIcon(str(icon_path))
+        app.setWindowIcon(app_icon)
+
     view = QWebEngineView()
     view.setWindowTitle(f"{widget_name} - WPT")
     view.resize(width, height)
