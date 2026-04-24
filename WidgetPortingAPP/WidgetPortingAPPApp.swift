@@ -162,6 +162,10 @@ struct WidgetPortingAPPApp: App {
                         alert.runModal()
                     }
                 }
+                
+                Button("Export .wdgt to HTML…") {
+                    widgetManager.openHTMLExportWindow()
+                }
 
                 Button("Open Data Folder…") {
                     let supportURL = WidgetManager.applicationSupportBaseURL()

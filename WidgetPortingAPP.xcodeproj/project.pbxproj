@@ -46,12 +46,12 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		23C44B4E2E6F8E2A0050424D /* Exceptions for "WidgetPortingAPP" folder in "WidgetPortingAPP" target */ = {
+		23C44B4E2E6F8E2A0050424D /* Exceptions for "WidgetPortingAPP" folder in "Widget Porting Toolkit" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 23DF79E02E6DEC0B007D5A01 /* WidgetPortingAPP */;
+			target = 23DF79E02E6DEC0B007D5A01 /* Widget Porting Toolkit */;
 		};
 		23D4814F2F983B5A008E756A /* Exceptions for "WidgetQuickLook" folder in "WidgetQuickLook" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
@@ -74,7 +74,7 @@
 		23DF79E32E6DEC0B007D5A01 /* WidgetPortingAPP */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				23C44B4E2E6F8E2A0050424D /* Exceptions for "WidgetPortingAPP" folder in "WidgetPortingAPP" target */,
+				23C44B4E2E6F8E2A0050424D /* Exceptions for "WidgetPortingAPP" folder in "Widget Porting Toolkit" target */,
 			);
 			path = WidgetPortingAPP;
 			sourceTree = "<group>";

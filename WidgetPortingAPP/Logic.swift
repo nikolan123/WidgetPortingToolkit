@@ -163,6 +163,7 @@ class WidgetManager: ObservableObject {
     @Published var loadingProgressNumerator: Int = 0       // Number of widgets loaded so far
     @Published var loadingProgressDenominator: Int = 0     // Total number of widgets to load
     private var loadingWindow: NSWindow? = nil             // Reference to the loading progress window
+    var htmlExportWindow: NSWindow? = nil                  // Reference to the HTML export window
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
