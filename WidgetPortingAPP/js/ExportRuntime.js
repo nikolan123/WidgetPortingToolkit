@@ -67,7 +67,11 @@
     }
 
     function noopHandler(name, impl) {
-        if (!window.webkit.messageHandlers[name]) {
+        var hasOwn = false;
+        try {
+            hasOwn = Object.prototype.hasOwnProperty.call(window.webkit.messageHandlers, name);
+        } catch (e) {}
+        if (!hasOwn) {
             window.webkit.messageHandlers[name] = {
                 postMessage: impl || function () {
                     wptWarn("Native bridge " + name + " unavailable in browser export.");
@@ -88,7 +92,10 @@
     });
 
     noopHandler("openURL", function (url) {
-        try { if (url) window.open(String(url), "_blank", "noopener"); } catch (e) {}
+        try {
+            if (!url) return;
+            window.open(String(url), "_blank", "noopener");
+        } catch (e) {}
     });
 
     noopHandler("prepareForTransition", function () {});
