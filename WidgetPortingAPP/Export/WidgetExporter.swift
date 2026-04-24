@@ -41,6 +41,12 @@ enum WidgetExporter {
     ) throws -> WidgetExportArtifact {
         let fm = FileManager.default
         let normalizedPath = widgetURL.pathExtension.lowercased()
+        var logLines: [String] = []
+
+        func step(_ message: String) {
+            progress(message)
+            logLines.append("[\(isoTimestamp())] \(message)")
+        }
 
         guard normalizedPath == "wdgt" else {
             throw WidgetExportError.invalidInput("Expected a .wdgt bundle.")
@@ -53,7 +59,7 @@ enum WidgetExporter {
             throw WidgetExportError.missingSupportDirectory
         }
 
-        progress("Parsing widget metadata…")
+        step("Parsing widget metadata…")
         var parseError: String?
         guard let parsed = parsePlist(from: widgetURL, showError: { parseError = $0 }) else {
             throw WidgetExportError.parseFailed(parseError ?? "Failed to parse widget Info.plist.")
@@ -72,38 +78,83 @@ enum WidgetExporter {
             throw WidgetExportError.fileOperationFailed("Failed to create export workspace: \(error.localizedDescription)")
         }
 
-        progress("Copying Support Directory…")
+        step("Copying Support Directory…")
         do {
             try fm.copyItem(at: URL(fileURLWithPath: supportDirectoryPath), to: supportDestination)
         } catch {
             throw WidgetExportError.fileOperationFailed("Failed to copy Support Directory into export: \(error.localizedDescription)")
         }
 
-        progress("Patching HTML/JS/CSS paths…")
+        step("Patching HTML/JS/CSS paths…")
         try patchWidgetFilesForExport(in: exportFolder)
 
-        progress("Preparing runtime JavaScript files…")
+        step("Preparing runtime JavaScript files…")
         try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
 
-        progress("Injecting runtime references into HTML files…")
+        step("Injecting runtime references into HTML files…")
         injectRuntimeScriptReferences(
             in: exportFolder,
             scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js"]
         )
 
-        progress("Preparing localizedStrings fallback…")
+        step("Preparing localizedStrings fallback…")
         let localizedFile = exportFolder.appendingPathComponent("localizedStrings.js")
         if !fm.fileExists(atPath: localizedFile.path) {
             let stub = "var localizedStrings = {};"
             try? stub.write(to: localizedFile, atomically: true, encoding: .utf8)
         }
 
-        progress("Creating zip archive…")
+        step("Writing info.txt…")
+        try writeInfoFile(
+            into: exportFolder,
+            widgetURL: widgetURL,
+            parsed: parsed,
+            supportDirectoryPath: supportDirectoryPath,
+            logLines: logLines
+        )
+
+        step("Creating zip archive…")
         let zipURL = workDirectory.appendingPathComponent("\(exportFolderName).zip")
         try zipFolder(at: exportFolder, to: zipURL, from: workDirectory)
 
         let suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.zip"
         return WidgetExportArtifact(workDirectory: workDirectory, zipURL: zipURL, suggestedFileName: suggestedFileName)
+    }
+
+    private static func writeInfoFile(
+        into folder: URL,
+        widgetURL: URL,
+        parsed: ParsedInfo,
+        supportDirectoryPath: String,
+        logLines: [String]
+    ) throws {
+        let width = Int(parsed.width.rounded())
+        let height = Int(parsed.height.rounded())
+        let lines: [String] = [
+            "Widget Porting Toolkit HTML Export",
+            "Generated: \(isoTimestamp())",
+            "",
+            "Widget: \(widgetURL.lastPathComponent)",
+            "Display Name: \(parsed.displayName)",
+            "Bundle Identifier: \(parsed.bundleIdentifier)",
+            "Version: \(parsed.version)",
+            "",
+            "Entry Point: \(parsed.mainHTML)",
+            "Window Size: \(width)x\(height)",
+            "",
+            "Support Directory Source: \(supportDirectoryPath)",
+            "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js",
+            "",
+            "Logs:",
+            logLines.isEmpty ? "(none)" : logLines.joined(separator: "\n")
+        ]
+
+        let infoURL = folder.appendingPathComponent("info.txt")
+        do {
+            try lines.joined(separator: "\n").write(to: infoURL, atomically: true, encoding: .utf8)
+        } catch {
+            throw WidgetExportError.fileOperationFailed("Failed to write info.txt: \(error.localizedDescription)")
+        }
     }
 
     private static func patchWidgetFilesForExport(in folder: URL) throws {
@@ -248,5 +299,11 @@ enum WidgetExporter {
             return source
         }
         return nil
+    }
+
+    private static func isoTimestamp() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date())
     }
 }
