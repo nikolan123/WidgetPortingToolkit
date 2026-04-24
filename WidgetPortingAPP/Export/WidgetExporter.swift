@@ -11,6 +11,7 @@ enum WidgetExportFormat: String, CaseIterable, Identifiable {
     case zip
     case webarchive
     case pythonRunner
+    case macOSApp
 
     var id: String { rawValue }
 
@@ -19,6 +20,7 @@ enum WidgetExportFormat: String, CaseIterable, Identifiable {
         case .zip: return "ZIP (.zip)"
         case .webarchive: return "Web Archive (.webarchive)"
         case .pythonRunner: return "Python Runner (.zip)"
+        case .macOSApp: return "macOS App (.app)"
         }
     }
 
@@ -27,6 +29,7 @@ enum WidgetExportFormat: String, CaseIterable, Identifiable {
         case .zip: return "zip"
         case .webarchive: return "webarchive"
         case .pythonRunner: return "zip"
+        case .macOSApp: return "app"
         }
     }
 }
@@ -169,6 +172,18 @@ enum WidgetExporter {
             )
             outputURL = pythonRunnerZipURL
             suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-python-runner.zip"
+        case .macOSApp:
+            step("Creating native macOS app bundle…")
+            let appName = sanitizedAppName(from: parsed.displayName.isEmpty ? widgetURL.deletingPathExtension().lastPathComponent : parsed.displayName)
+            let appURL = workDirectory.appendingPathComponent("\(appName).app")
+            try WidgetAppExportBuilder.buildAppBundle(
+                workDirectory: workDirectory,
+                processedWidgetFolder: exportFolder,
+                parsed: parsed,
+                outputAppURL: appURL
+            )
+            outputURL = appURL
+            suggestedFileName = "\(appName).app"
         }
 
         return WidgetExportArtifact(
@@ -201,7 +216,7 @@ enum WidgetExporter {
             "Entry Point: \(parsed.mainHTML)",
             "Window Size: \(width)x\(height)",
             "",
-            "Export Formats Available: zip, webarchive, python-runner",
+            "Export Formats Available: zip, webarchive, python-runner, macos-app",
             "Support Directory Source: \(supportDirectoryPath)",
             "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js",
             format == .pythonRunner ? "Python Requirement: PySide6 must be installed (pip install PySide6 or uv sync)." : "",
@@ -448,5 +463,15 @@ enum WidgetExporter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.string(from: Date())
+    }
+
+    private static func sanitizedAppName(from raw: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " -_"))
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filteredScalars = trimmed.unicodeScalars.map { allowed.contains($0) ? Character($0) : Character(" ") }
+        let collapsed = String(filteredScalars)
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return collapsed.isEmpty ? "Widget Export" : collapsed
     }
 }

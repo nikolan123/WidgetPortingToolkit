@@ -9,9 +9,11 @@ import SwiftUI
 
 @main
 struct WidgetPlayerTemplateApp: App {
+    private let config = WidgetConfigLoader.load()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(config: config)
         }
     }
 }
