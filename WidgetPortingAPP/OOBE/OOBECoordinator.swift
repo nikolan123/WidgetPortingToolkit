@@ -122,6 +122,7 @@ struct OOBECoordinatorView: View {
             }
         }
         .frame(minWidth: 650, minHeight: 480)
+        .preferredColorScheme(.dark)
     }
     
     private func closeWindow() {
