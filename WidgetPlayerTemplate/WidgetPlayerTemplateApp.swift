@@ -47,7 +47,7 @@ struct WidgetPlayerTemplateApp: App {
     }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var overlayController: TemplateOverlayController?
     private var flagsMonitor: Any?
@@ -67,6 +67,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         currentConfig = config
+        showOrCreateWindow()
+        bindRuntimeSettings()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showOrCreateWindow()
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsMonitor = nil
+        }
+        overlayController?.cleanup()
+        overlayController = nil
+    }
+
+    private func showOrCreateWindow() {
+        guard let config = currentConfig else { return }
+
+        if let window {
+            installFlagsMonitor()
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
 
         let widgetController = WidgetPlayerViewController(config: config, runtimeSettings: runtimeSettings)
         let window = NSWindow(
@@ -75,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             backing: .buffered,
             defer: false
         )
+        window.delegate = self
         window.title = config.displayName
         window.contentViewController = widgetController
         window.setContentSize(NSSize(width: config.width, height: config.height))
@@ -90,21 +122,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let overlayController = TemplateOverlayController(parentWindow: window, displayName: config.displayName)
         self.overlayController = overlayController
 
-        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            self?.overlayController?.handleOptionKey(held: event.modifierFlags.contains(.option))
-            return event
-        }
-
-        bindRuntimeSettings()
+        installFlagsMonitor()
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    private func installFlagsMonitor() {
         if let monitor = flagsMonitor {
             NSEvent.removeMonitor(monitor)
             flagsMonitor = nil
         }
-        overlayController?.cleanup()
-        overlayController = nil
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.overlayController?.handleOptionKey(held: event.modifierFlags.contains(.option))
+            return event
+        }
     }
 
     private func bindRuntimeSettings() {
@@ -207,5 +236,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.setContentSize(viewportSize)
         applyWindowChrome(to: window)
         applyWindowTransparency(to: window)
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender == window else { return true }
+        overlayController?.dismissOverlay()
+        if let monitor = flagsMonitor {
+            NSEvent.removeMonitor(monitor)
+            flagsMonitor = nil
+        }
+        sender.orderOut(nil)
+        return false
     }
 }

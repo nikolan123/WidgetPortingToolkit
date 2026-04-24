@@ -13,6 +13,8 @@ final class TemplateOverlayController {
     private var overlayWindow: NSWindow?
     private var mouseMonitor: Any?
     private var resizeObserver: Any?
+    private var isCleaningUp = false
+    private var parentIsClosing = false
 
     private let state: TemplateOverlayState
     private var isResizing = false
@@ -88,6 +90,10 @@ final class TemplateOverlayController {
 
     private func hideOverlay() {
         guard let overlay = overlayWindow else { return }
+        guard !isCleaningUp && !parentIsClosing else {
+            removeOverlayWindow(overlay)
+            return
+        }
 
         if isResizing {
             isResizing = false
@@ -103,10 +109,19 @@ final class TemplateOverlayController {
             overlay.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             guard let self, let overlay = self.overlayWindow else { return }
-            self.parentWindow?.removeChildWindow(overlay)
-            overlay.orderOut(nil)
-            self.overlayWindow = nil
+            self.removeOverlayWindow(overlay)
         })
+    }
+
+    private func removeOverlayWindow(_ overlay: NSWindow) {
+        if !parentIsClosing {
+            parentWindow?.removeChildWindow(overlay)
+        }
+        overlay.orderOut(nil)
+        overlay.contentViewController = nil
+        if overlayWindow === overlay {
+            overlayWindow = nil
+        }
     }
 
     private func updateOverlayFrame() {
@@ -158,8 +173,25 @@ final class TemplateOverlayController {
         return window.contentRect(forFrameRect: window.frame).size
     }
 
+    func dismissOverlay() {
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+        if isResizing {
+            isResizing = false
+            state.isResizing = false
+        }
+        if let overlay = overlayWindow {
+            removeOverlayWindow(overlay)
+        }
+    }
+
     func cleanup() {
-        hideOverlay()
+        guard !isCleaningUp else { return }
+        isCleaningUp = true
+
+        dismissOverlay()
         if let observer = resizeObserver {
             NotificationCenter.default.removeObserver(observer)
             resizeObserver = nil
@@ -168,6 +200,26 @@ final class TemplateOverlayController {
             NSEvent.removeMonitor(monitor)
             mouseMonitor = nil
         }
+    }
+
+    func parentWindowWillClose() {
+        guard !parentIsClosing else { return }
+        parentIsClosing = true
+
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+        if let observer = resizeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            resizeObserver = nil
+        }
+        if let overlay = overlayWindow {
+            overlay.orderOut(nil)
+            overlay.contentViewController = nil
+            overlayWindow = nil
+        }
+        parentWindow = nil
     }
 
     deinit {

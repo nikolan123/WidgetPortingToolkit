@@ -100,6 +100,7 @@ enum WidgetConfigLoader {
 
 final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let config: WidgetConfig
+    private let appBundleIdentifier: String
     private let prefsNamespace: String
     private let runtimeSettings: TemplateRuntimeSettings
     private var transitionDirection: String?
@@ -112,7 +113,8 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
 
     init(config: WidgetConfig, runtimeSettings: TemplateRuntimeSettings = .shared) {
         self.config = config
-        self.prefsNamespace = "WidgetPrefs::\(config.bundleIdentifier)"
+        self.appBundleIdentifier = Bundle.main.bundleIdentifier ?? config.bundleIdentifier
+        self.prefsNamespace = "WidgetPrefs::\(appBundleIdentifier)"
         self.runtimeSettings = runtimeSettings
         super.init(nibName: nil, bundle: nil)
     }
@@ -171,7 +173,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         let prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
         let prefsData = (try? JSONSerialization.data(withJSONObject: prefs, options: [])) ?? Data()
         let prefsJSON = String(data: prefsData, encoding: .utf8) ?? "{}"
-        let widgetIdentifier = config.bundleIdentifier + "_template"
+        let widgetIdentifier = appBundleIdentifier + "_template"
 
         if let dashboard = loadBundledJS(named: "DashboardAPI"),
            let widgetShims = loadBundledJS(named: "WidgetShims") {
