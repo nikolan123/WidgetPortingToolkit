@@ -10,6 +10,7 @@ import Foundation
 enum WidgetExportFormat: String, CaseIterable, Identifiable {
     case zip
     case webarchive
+    case pythonRunner
 
     var id: String { rawValue }
 
@@ -17,6 +18,7 @@ enum WidgetExportFormat: String, CaseIterable, Identifiable {
         switch self {
         case .zip: return "ZIP (.zip)"
         case .webarchive: return "Web Archive (.webarchive)"
+        case .pythonRunner: return "Python Runner (.zip)"
         }
     }
 
@@ -24,6 +26,7 @@ enum WidgetExportFormat: String, CaseIterable, Identifiable {
         switch self {
         case .zip: return "zip"
         case .webarchive: return "webarchive"
+        case .pythonRunner: return "zip"
         }
     }
 }
@@ -136,6 +139,7 @@ enum WidgetExporter {
             into: exportFolder,
             widgetURL: widgetURL,
             parsed: parsed,
+            format: format,
             supportDirectoryPath: supportDirectoryPath,
             logLines: logLines
         )
@@ -155,6 +159,16 @@ enum WidgetExporter {
             try WebArchiveBuilder.writeWebArchive(from: exportFolder, parsed: parsed, to: webarchiveURL)
             outputURL = webarchiveURL
             suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-widget.webarchive"
+        case .pythonRunner:
+            step("Creating Python runner archive…")
+            let pythonRunnerZipURL = workDirectory.appendingPathComponent("\(widgetURL.deletingPathExtension().lastPathComponent)-python-runner.zip")
+            try PythonRunnerExportBuilder.buildArchive(
+                workDirectory: workDirectory,
+                processedWidgetFolder: exportFolder,
+                outputZipURL: pythonRunnerZipURL
+            )
+            outputURL = pythonRunnerZipURL
+            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-python-runner.zip"
         }
 
         return WidgetExportArtifact(
@@ -169,6 +183,7 @@ enum WidgetExporter {
         into folder: URL,
         widgetURL: URL,
         parsed: ParsedInfo,
+        format: WidgetExportFormat,
         supportDirectoryPath: String,
         logLines: [String]
     ) throws {
@@ -186,13 +201,14 @@ enum WidgetExporter {
             "Entry Point: \(parsed.mainHTML)",
             "Window Size: \(width)x\(height)",
             "",
-            "Export Formats Available: zip, webarchive",
+            "Export Formats Available: zip, webarchive, python-runner",
             "Support Directory Source: \(supportDirectoryPath)",
             "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js",
+            format == .pythonRunner ? "Python Requirement: PySide6 must be installed (pip install PySide6 or uv sync)." : "",
             "",
             "Logs:",
             logLines.isEmpty ? "(none)" : logLines.joined(separator: "\n")
-        ]
+        ].filter { !$0.isEmpty }
 
         let infoURL = folder.appendingPathComponent("info.txt")
         do {
