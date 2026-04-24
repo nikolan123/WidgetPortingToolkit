@@ -17,7 +17,7 @@ jobs:
 
       - name: Build App
         run: |
-          xcodebuild -scheme "Widget Porting Toolkit" \
+          xcodebuild -scheme "WidgetPlayerTemplate" \
                      -configuration Release \
                      -destination "platform=macOS" \
                      ARCHS="arm64 x86_64" \
@@ -25,9 +25,20 @@ jobs:
                      BUILD_DIR=build \
                      clean build
 
+          xcodebuild -scheme "Widget Porting Toolkit" \
+                     -configuration Release \
+                     -destination "platform=macOS" \
+                     ARCHS="arm64 x86_64" \
+                     ONLY_ACTIVE_ARCH=NO \
+                     BUILD_DIR=build \
+                     build
+
       - name: Package ZIP
         run: |
           cd build/Release
+          mkdir -p "Widget Porting Toolkit.app/Contents/Resources/Templates"
+          rm -rf "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+          ditto "WidgetPlayerTemplate.app" "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
           zip -r "Widget Porting Toolkit.zip" "Widget Porting Toolkit.app"
 
       - name: Upload ZIP artifact
