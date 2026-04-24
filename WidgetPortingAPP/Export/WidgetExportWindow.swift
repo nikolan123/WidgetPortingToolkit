@@ -11,7 +11,7 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class WidgetExportViewModel: ObservableObject {
-    @Published var statusText: String = "Drop a .wdgt file to export"
+    @Published var statusText: String = "Drop a .wdgt file to create an export package."
     @Published var isBusy: Bool = false
     @Published var lastOutputPath: String?
     @Published var exportFormat: WidgetExportFormat = .zip
@@ -116,16 +116,18 @@ struct WidgetExportWindow: View {
     }
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 16) {
             Image(systemName: "shippingbox")
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 36, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
 
-            Text("Export Widget to HTML")
+            Text("Widget Exporter")
                 .font(.title3.weight(.semibold))
 
-            Text("Drop a .wdgt bundle here")
+            Text("Drop a .wdgt bundle to create a portable widget package.")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             Picker("Format", selection: $model.exportFormat) {
                 ForEach(WidgetExportFormat.allCases) { format in
@@ -134,7 +136,6 @@ struct WidgetExportWindow: View {
             }
             .pickerStyle(.menu)
             .disabled(model.isBusy)
-                Spacer()
 
             if model.isBusy {
                 ProgressView()
@@ -157,11 +158,14 @@ struct WidgetExportWindow: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(20)
-        .frame(width: 430, height: 260)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.windowBackgroundColor))
+        .padding(22)
+        .frame(width: 470, height: 300)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .background(Color(NSColor.windowBackgroundColor))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.accentColor.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [7, 6]))
+                .padding(8)
         )
         .onDrop(of: ["public.file-url"], isTargeted: nil) { providers in
             model.handleDrop(providers: providers)
@@ -181,13 +185,12 @@ extension WidgetManager {
         let hosting = NSHostingController(rootView: content)
 
         let window = NSWindow(contentViewController: hosting)
-        window.title = "Export .wdgt to HTML"
-        window.setContentSize(NSSize(width: 430, height: 260))
+        window.title = "Widget Exporter"
+        window.setContentSize(NSSize(width: 470, height: 300))
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.center()
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
-        window.level = .floating
 
         htmlExportWindow = window
 

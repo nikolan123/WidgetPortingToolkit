@@ -39,7 +39,7 @@
                 return String(window.widget.identifier);
             }
         } catch (e) {}
-        return "widget_html_export";
+        return "widget_export";
     }
 
     function prefStorageKey(key) {

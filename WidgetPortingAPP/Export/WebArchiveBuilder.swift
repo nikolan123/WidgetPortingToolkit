@@ -47,7 +47,7 @@ enum WebArchiveBuilder {
             throw WidgetExportError.fileOperationFailed("Main HTML file missing for webarchive: \(parsed.mainHTML)")
         }
 
-        let archiveRoot = "https://widgets.nikolan.net/\(parsed.bundleIdentifier)_html_export/"
+        let archiveRoot = "https://widgets.nikolan.net/\(parsed.bundleIdentifier)_widget_export/"
         guard let baseURL = URL(string: archiveRoot) else {
             throw WidgetExportError.fileOperationFailed("Failed to build webarchive base URL.")
         }

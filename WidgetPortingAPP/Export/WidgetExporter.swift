@@ -89,8 +89,8 @@ enum WidgetExporter {
         }
 
         let exportID = UUID().uuidString
-        let workDirectory = fm.temporaryDirectory.appendingPathComponent("WidgetHTMLExport_\(exportID)", isDirectory: true)
-        let exportFolderName = "\(widgetURL.deletingPathExtension().lastPathComponent)_html_export"
+        let workDirectory = fm.temporaryDirectory.appendingPathComponent("WidgetExport_\(exportID)", isDirectory: true)
+        let exportFolderName = "\(widgetURL.deletingPathExtension().lastPathComponent)_widget_export"
         let exportFolder = workDirectory.appendingPathComponent(exportFolderName, isDirectory: true)
         let supportDestination = exportFolder.appendingPathComponent("SupportDirectory", isDirectory: true)
 
@@ -108,13 +108,13 @@ enum WidgetExporter {
             throw WidgetExportError.fileOperationFailed("Failed to copy Support Directory into export: \(error.localizedDescription)")
         }
 
-        step("Patching HTML/JS/CSS paths…")
+        step("Patching widget file paths…")
         try patchWidgetFilesForExport(in: exportFolder, mainHTMLPath: parsed.mainHTML)
 
         step("Preparing runtime JavaScript files…")
         try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
 
-        step("Injecting runtime references into HTML files…")
+        step("Injecting runtime references…")
         injectRuntimeScriptReferences(
             rootFolder: exportFolder,
             in: exportFolder,
@@ -148,13 +148,13 @@ enum WidgetExporter {
             let zipURL = workDirectory.appendingPathComponent("\(exportFolderName).zip")
             try zipFolder(at: exportFolder, to: zipURL, from: workDirectory)
             outputURL = zipURL
-            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.zip"
+            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-widget.zip"
         case .webarchive:
             step("Creating .webarchive (binary plist)…")
             let webarchiveURL = workDirectory.appendingPathComponent("\(exportFolderName).webarchive")
             try WebArchiveBuilder.writeWebArchive(from: exportFolder, parsed: parsed, to: webarchiveURL)
             outputURL = webarchiveURL
-            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.webarchive"
+            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-widget.webarchive"
         }
 
         return WidgetExportArtifact(
@@ -175,7 +175,7 @@ enum WidgetExporter {
         let width = Int(parsed.width.rounded())
         let height = Int(parsed.height.rounded())
         let lines: [String] = [
-            "Widget Porting Toolkit HTML Export",
+            "Widget Porting Toolkit Widget Export",
             "Generated: \(isoTimestamp())",
             "",
             "Widget: \(widgetURL.lastPathComponent)",
@@ -392,7 +392,7 @@ enum WidgetExporter {
 
         let dashboardPatched = dashboard
             .replacingOccurrences(of: "__WIDGET_PREFS__", with: "{}")
-            .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: "\(bundleID)_html_export")
+            .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: "\(bundleID)_widget_export")
 
         let outputs: [(String, String)] = [
             ("DashboardAPI.js", dashboardPatched),

@@ -163,7 +163,7 @@ struct WidgetPortingAPPApp: App {
                     }
                 }
                 
-                Button("Export .wdgt to HTML…") {
+                Button("Open Widget Exporter…") {
                     widgetManager.openHTMLExportWindow()
                 }
 
