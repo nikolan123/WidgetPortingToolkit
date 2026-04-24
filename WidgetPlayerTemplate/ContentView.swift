@@ -20,8 +20,7 @@ struct WidgetConfig {
 
 enum WidgetConfigLoader {
     static func load() -> WidgetConfig? {
-        guard let resourcesURL = Bundle.main.resourceURL else { return nil }
-        let widgetRoot = resourcesURL.appendingPathComponent("widget", isDirectory: true)
+        guard let widgetRoot = resolveWidgetRoot() else { return nil }
         let infoURL = widgetRoot.appendingPathComponent("Info.plist")
         guard let data = try? Data(contentsOf: infoURL),
               let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
@@ -78,6 +77,33 @@ enum WidgetConfigLoader {
         }
         return nil
     }
+
+    private static func resolveWidgetRoot() -> URL? {
+        let fm = FileManager.default
+        let env = ProcessInfo.processInfo.environment
+
+        // Fast dev loop:
+        // WPT_WIDGET_DEV_ROOT can point to either:
+        // 1) a processed widget folder containing Info.plist, or
+        // 2) a .wdgt bundle path
+        if let rawPath = env["WPT_WIDGET_DEV_ROOT"], !rawPath.isEmpty {
+            let expanded = NSString(string: rawPath).expandingTildeInPath
+            let candidate = URL(fileURLWithPath: expanded).standardizedFileURL
+            let infoURL = candidate.appendingPathComponent("Info.plist")
+            if fm.fileExists(atPath: infoURL.path) {
+                return candidate
+            }
+        }
+
+        guard let resourcesURL = Bundle.main.resourceURL else { return nil }
+        let bundledWidgetRoot = resourcesURL.appendingPathComponent("widget", isDirectory: true)
+        let bundledInfo = bundledWidgetRoot.appendingPathComponent("Info.plist")
+        if fm.fileExists(atPath: bundledInfo.path) {
+            return bundledWidgetRoot
+        }
+
+        return nil
+    }
 }
 
 struct ContentView: View {
@@ -88,7 +114,7 @@ struct ContentView: View {
         Group {
             if let config {
                 WidgetWebView(config: config)
-                    .frame(width: config.width, height: config.height)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -141,6 +167,7 @@ struct WidgetWebView: NSViewRepresentable {
         controller.add(context.coordinator, name: "systemCommand")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.autoresizingMask = [.width, .height]
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         webView.loadFileURL(config.entryURL, allowingReadAccessTo: config.widgetRoot)
