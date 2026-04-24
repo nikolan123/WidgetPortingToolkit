@@ -14,6 +14,7 @@ final class WidgetExportViewModel: ObservableObject {
     @Published var statusText: String = "Drop a .wdgt file to export"
     @Published var isBusy: Bool = false
     @Published var lastOutputPath: String?
+    @Published var exportFormat: WidgetExportFormat = .zip
 
     private let manager: WidgetManager
 
@@ -48,11 +49,13 @@ final class WidgetExportViewModel: ObservableObject {
         lastOutputPath = nil
 
         let supportPath = manager.supportDirectoryPath
+        let selectedFormat = exportFormat
 
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let artifact = try WidgetExporter.exportWidgetToHTMLBundle(
                     widgetURL: widgetURL,
+                    format: selectedFormat,
                     supportDirectoryPath: supportPath
                 ) { progress in
                     DispatchQueue.main.async {
@@ -75,7 +78,7 @@ final class WidgetExportViewModel: ObservableObject {
     private func presentSavePanel(for artifact: WidgetExportArtifact) {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = artifact.suggestedFileName
-        panel.allowedContentTypes = [.zip]
+        panel.allowedContentTypes = [UTType(filenameExtension: artifact.format.outputExtension) ?? .data]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
 
@@ -95,7 +98,7 @@ final class WidgetExportViewModel: ObservableObject {
             if fm.fileExists(atPath: destinationURL.path) {
                 try fm.removeItem(at: destinationURL)
             }
-            try fm.copyItem(at: artifact.zipURL, to: destinationURL)
+            try fm.copyItem(at: artifact.outputURL, to: destinationURL)
             lastOutputPath = destinationURL.path
             statusText = "Export complete."
             NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
@@ -123,6 +126,15 @@ struct WidgetExportWindow: View {
 
             Text("Drop a .wdgt bundle here")
                 .foregroundStyle(.secondary)
+
+            Picker("Format", selection: $model.exportFormat) {
+                ForEach(WidgetExportFormat.allCases) { format in
+                    Text(format.displayName).tag(format)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(model.isBusy)
+                Spacer()
 
             if model.isBusy {
                 ProgressView()

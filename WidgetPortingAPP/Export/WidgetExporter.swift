@@ -7,10 +7,32 @@
 
 import Foundation
 
+enum WidgetExportFormat: String, CaseIterable, Identifiable {
+    case zip
+    case webarchive
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .zip: return "ZIP (.zip)"
+        case .webarchive: return "Web Archive (.webarchive)"
+        }
+    }
+
+    var outputExtension: String {
+        switch self {
+        case .zip: return "zip"
+        case .webarchive: return "webarchive"
+        }
+    }
+}
+
 struct WidgetExportArtifact {
     let workDirectory: URL
-    let zipURL: URL
+    let outputURL: URL
     let suggestedFileName: String
+    let format: WidgetExportFormat
 }
 
 enum WidgetExportError: LocalizedError {
@@ -36,6 +58,7 @@ enum WidgetExportError: LocalizedError {
 enum WidgetExporter {
     static func exportWidgetToHTMLBundle(
         widgetURL: URL,
+        format: WidgetExportFormat,
         supportDirectoryPath: String,
         progress: @escaping (String) -> Void
     ) throws -> WidgetExportArtifact {
@@ -93,6 +116,7 @@ enum WidgetExporter {
 
         step("Injecting runtime references into HTML files…")
         injectRuntimeScriptReferences(
+            rootFolder: exportFolder,
             in: exportFolder,
             scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js"]
         )
@@ -104,6 +128,9 @@ enum WidgetExporter {
             try? stub.write(to: localizedFile, atomically: true, encoding: .utf8)
         }
 
+        step("Removing hidden/version-control files…")
+        try sanitizeExportFolder(at: exportFolder)
+
         step("Writing info.txt…")
         try writeInfoFile(
             into: exportFolder,
@@ -113,12 +140,29 @@ enum WidgetExporter {
             logLines: logLines
         )
 
-        step("Creating zip archive…")
-        let zipURL = workDirectory.appendingPathComponent("\(exportFolderName).zip")
-        try zipFolder(at: exportFolder, to: zipURL, from: workDirectory)
+        let outputURL: URL
+        let suggestedFileName: String
+        switch format {
+        case .zip:
+            step("Creating zip archive…")
+            let zipURL = workDirectory.appendingPathComponent("\(exportFolderName).zip")
+            try zipFolder(at: exportFolder, to: zipURL, from: workDirectory)
+            outputURL = zipURL
+            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.zip"
+        case .webarchive:
+            step("Creating .webarchive (binary plist)…")
+            let webarchiveURL = workDirectory.appendingPathComponent("\(exportFolderName).webarchive")
+            try WebArchiveBuilder.writeWebArchive(from: exportFolder, parsed: parsed, to: webarchiveURL)
+            outputURL = webarchiveURL
+            suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.webarchive"
+        }
 
-        let suggestedFileName = "\(widgetURL.deletingPathExtension().lastPathComponent)-html-widget.zip"
-        return WidgetExportArtifact(workDirectory: workDirectory, zipURL: zipURL, suggestedFileName: suggestedFileName)
+        return WidgetExportArtifact(
+            workDirectory: workDirectory,
+            outputURL: outputURL,
+            suggestedFileName: suggestedFileName,
+            format: format
+        )
     }
 
     private static func writeInfoFile(
@@ -142,6 +186,7 @@ enum WidgetExporter {
             "Entry Point: \(parsed.mainHTML)",
             "Window Size: \(width)x\(height)",
             "",
+            "Export Formats Available: zip, webarchive",
             "Support Directory Source: \(supportDirectoryPath)",
             "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js",
             "",
@@ -167,26 +212,29 @@ enum WidgetExporter {
         for case let fileURL as URL in enumerator {
             guard allowedExtensions.contains(fileURL.pathExtension.lowercased()) else { continue }
             if fileURL.path.contains(".lproj/") { continue }
+            if ExportPathRules.shouldSkipExportedPath(fileURL, root: folder) { continue }
 
             do {
                 let original = try String(contentsOf: fileURL, encoding: .utf8)
                 var content = original
+                let prefix = relativePrefix(from: fileURL.deletingLastPathComponent(), toRoot: folder)
+                let supportPathForFile = "\(prefix)SupportDirectory"
 
                 content = content.replacingOccurrences(
                     of: "file:///System/Library/WidgetResources",
-                    with: "./SupportDirectory"
+                    with: supportPathForFile
                 )
                 content = content.replacingOccurrences(
                     of: "/System/Library/WidgetResources",
-                    with: "./SupportDirectory"
+                    with: supportPathForFile
                 )
                 content = content.replacingOccurrences(
                     of: "\"AppleClasses",
-                    with: "\"./SupportDirectory/AppleClasses"
+                    with: "\"\(supportPathForFile)/AppleClasses"
                 )
                 content = content.replacingOccurrences(
                     of: #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#,
-                    with: "./$1",
+                    with: "\(prefix)$1",
                     options: .regularExpression
                 )
 
@@ -206,17 +254,20 @@ enum WidgetExporter {
         }
     }
 
-    private static func injectRuntimeScriptReferences(in folder: URL, scriptFileNames: [String]) {
+    private static func injectRuntimeScriptReferences(rootFolder: URL, in folder: URL, scriptFileNames: [String]) {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else { return }
-        let scriptTags = scriptFileNames.map { "<script src=\"./\($0)\"></script>" }
 
         for case let fileURL as URL in enumerator {
             guard fileURL.pathExtension.lowercased() == "html" else { continue }
             if fileURL.path.contains(".lproj/") { continue }
+            if ExportPathRules.shouldSkipExportedPath(fileURL, root: folder) { continue }
 
             guard var html = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
-            if scriptFileNames.contains(where: { html.contains($0) }) { continue }
+            if html.contains("ExportRuntime.js") { continue }
+
+            let prefix = relativePrefix(from: fileURL.deletingLastPathComponent(), toRoot: rootFolder)
+            let scriptTags = scriptFileNames.map { "<script src=\"\(prefix)\($0)\"></script>" }
 
             let injected = scriptTags.joined(separator: "\n")
 
@@ -252,6 +303,48 @@ enum WidgetExporter {
             let errorData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
             let stderrText = String(data: errorData, encoding: .utf8) ?? "unknown error"
             throw WidgetExportError.zipFailed("zip failed with status \(process.terminationStatus): \(stderrText)")
+        }
+    }
+
+    private static func relativePrefix(from directory: URL, toRoot root: URL) -> String {
+        let dirPath = directory.standardizedFileURL.path
+        let rootPath = root.standardizedFileURL.path
+
+        if dirPath == rootPath {
+            return "./"
+        }
+
+        let expectedPrefix = rootPath.hasSuffix("/") ? rootPath : rootPath + "/"
+        guard dirPath.hasPrefix(expectedPrefix) else {
+            return "./"
+        }
+
+        let remainder = String(dirPath.dropFirst(expectedPrefix.count))
+        if remainder.isEmpty {
+            return "./"
+        }
+
+        let depth = remainder.split(separator: "/").count
+        if depth <= 0 {
+            return "./"
+        }
+        return String(repeating: "../", count: depth)
+    }
+
+    private static func sanitizeExportFolder(at root: URL) throws {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: nil) else { return }
+        var toDelete: [URL] = []
+
+        for case let url as URL in enumerator {
+            if ExportPathRules.shouldSkipExportedPath(url, root: root) {
+                toDelete.append(url)
+            }
+        }
+
+        let ordered = toDelete.sorted { $0.path.count > $1.path.count }
+        for url in ordered {
+            try? fm.removeItem(at: url)
         }
     }
 
