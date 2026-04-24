@@ -196,7 +196,9 @@ extension WidgetManager {
             object: window,
             queue: .main
         ) { [weak self] _ in
-            self?.htmlExportWindow = nil
+            Task { @MainActor [weak self] in
+                self?.htmlExportWindow = nil
+            }
         }
     }
 }
