@@ -508,7 +508,7 @@ class WidgetManager: ObservableObject {
     }
 
     // Preprocess
-    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, tweaks: WidgetTweaks) -> URL? {
+    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, mainHTMLPath: String, tweaks: WidgetTweaks) -> URL? {
         guard !supportDirectoryPath.isEmpty else {
             showError("No Support Directory set. Please select one (Options > Install Support Directory) before loading a widget.")
             return nil
@@ -527,8 +527,14 @@ class WidgetManager: ObservableObject {
         // Determine the support directory source (widgetresources)
         let installedSupportURL = URL(fileURLWithPath: supportDirectoryPath)
 
+        let mainDocumentDirectory = folder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
+        let rootPathForDocument = Self.relativePath(
+            fromDirectory: mainDocumentDirectory,
+            toDirectory: tempFolder
+        )
+
         // copy if requested
-        var supportPathForReplacement = installedSupportURL.path
+        var supportPathForReplacement = "file://\(installedSupportURL.path)"
         if tweaks.copySupportDirectory {
             let tempSupportDir = tempFolder.appendingPathComponent("SupportDirectory")
             do {
@@ -536,7 +542,10 @@ class WidgetManager: ObservableObject {
                     try fm.removeItem(at: tempSupportDir)
                 }
                 try fm.copyItem(at: installedSupportURL, to: tempSupportDir)
-                supportPathForReplacement = tempSupportDir.path
+                supportPathForReplacement = Self.relativePath(
+                    fromDirectory: mainDocumentDirectory,
+                    toDirectory: tempSupportDir
+                )
             } catch {
                 showError("Failed to copy Support Directory into \(bundleID): \(error.localizedDescription)")
                 return nil
@@ -544,35 +553,42 @@ class WidgetManager: ObservableObject {
         }
 
         // go thru each html,js,css and replace hardcoded library dir
-        let allowedExtensions = ["html", "js", "css"]
-        let fileEnumerator = fm.enumerator(at: tempFolder, includingPropertiesForKeys: nil)!
+        let allowedExtensions = Set(["html", "js", "css"])
+        guard let fileEnumerator = fm.enumerator(at: tempFolder, includingPropertiesForKeys: nil) else {
+            showError("Failed to enumerate widget files for preprocessing.")
+            return nil
+        }
 
         for case let fileURL as URL in fileEnumerator where allowedExtensions.contains(fileURL.pathExtension.lowercased()) {
             // localized files make it error
             if fileURL.path.contains(".lproj/") {
                 continue
             }
+            if ExportPathRules.shouldSkipExportedPath(fileURL, root: tempFolder) {
+                continue
+            }
             do {
-                var content = try String(contentsOf: fileURL, encoding: .utf8)
+                let original = try String(contentsOf: fileURL, encoding: .utf8)
+                var content = original
 
                 if tweaks.replaceFileSchemePaths {
                     content = content.replacingOccurrences(
                         of: "file:///System/Library/WidgetResources",
-                        with: "file://\(supportPathForReplacement)"
+                        with: supportPathForReplacement
                     )
                     content = content.replacingOccurrences(
                         of: "/System/Library/WidgetResources",
-                        with: "file://\(supportPathForReplacement)"
+                        with: supportPathForReplacement
                     )
                     content = content.replacingOccurrences(
                         of: "\"AppleClasses",
-                        with: "\"file://\(supportPathForReplacement)/AppleClasses"
+                        with: "\"\(supportPathForReplacement)/AppleClasses"
                     )
                     // replace ~/Library/Widgets/[^ ]+\.wdgt with widget's new path
                     let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
                     content = content.replacingOccurrences(
                         of: pattern,
-                        with: "file://\(tempFolder.path)$1",
+                        with: "\(rootPathForDocument)$1",
                         options: .regularExpression
                     )
                 }
@@ -587,7 +603,6 @@ class WidgetManager: ObservableObject {
                     )
                 }
 
-                let original = try String(contentsOf: fileURL, encoding: .utf8)
                 if content != original {
                     try content.write(to: fileURL, atomically: true, encoding: .utf8)
                 }
@@ -607,6 +622,31 @@ class WidgetManager: ObservableObject {
         return tempFolder
     }
 
+    private static func relativePath(fromDirectory source: URL, toDirectory target: URL) -> String {
+        let src = source.standardizedFileURL.pathComponents
+        let dst = target.standardizedFileURL.pathComponents
+        var common = 0
+        while common < src.count && common < dst.count && src[common] == dst[common] {
+            common += 1
+        }
+
+        let upCount = max(0, src.count - common)
+        let up = String(repeating: "../", count: upCount)
+        let downParts = Array(dst.dropFirst(common))
+        let down = downParts.joined(separator: "/")
+
+        if up.isEmpty && down.isEmpty {
+            return "./"
+        }
+        if up.isEmpty {
+            return "./" + down
+        }
+        if down.isEmpty {
+            return up.hasSuffix("/") ? String(up.dropLast()) : up
+        }
+        return up + down
+    }
+
     // widget loader
     func loadWidget(
         from folderURL: URL,
@@ -619,7 +659,13 @@ class WidgetManager: ObservableObject {
 
         let tweaks = self.tweaks(for: plistInfo.bundleIdentifier, id: id)
 
-        guard let processedFolder = preprocessFolder(folderURL, bundleID: plistInfo.bundleIdentifier, id: id, tweaks: tweaks) else {
+        guard let processedFolder = preprocessFolder(
+            folderURL,
+            bundleID: plistInfo.bundleIdentifier,
+            id: id,
+            mainHTMLPath: plistInfo.mainHTML,
+            tweaks: tweaks
+        ) else {
             return
         }
 
