@@ -100,14 +100,14 @@ struct CustomWindowContainer: View {
                         return existingIdentifier == windowIdentifier
                     })
                     
-                    if existingWindow != nil {
+                    if let existingWindow {
                         let alert = NSAlert()
                         alert.messageText = "Widget Already Open"
                         alert.informativeText = "A window for this widget is already open. To open multiple instances, go to Options > Allow multiple instances of the same widget."
                         alert.alertStyle = .informational
                         alert.addButton(withTitle: "OK")
                         alert.runModal()
-                        bringToFront(existingWindow!)
+                        bringToFront(existingWindow)
                         return
                     }
                 }
@@ -157,8 +157,6 @@ struct CustomWindowView: View {
     let onClose: (UUID) -> Void
     let onFocus: (CustomWindow) -> Void
     
-    @AppStorage("borderlessFullScreenWidgets") var borderlessFullScreenWidgets: Bool = true
-    
     @State private var isCloseHovered = false
     
     // Overlay state
@@ -173,7 +171,7 @@ struct CustomWindowView: View {
             // Main Content
             VStack(spacing: 0) {
                 // MARK: Title Bar
-                if !borderlessFullScreenWidgets {
+                if !widgetManager.borderlessFullScreenWidgets {
                     HStack {
                         Text(window.appInfo.displayName)
                             .font(.system(size: 13))
@@ -269,7 +267,10 @@ struct CustomWindowView: View {
                         widgetManager.resizeWindow(for: window.appInfo, width: window.size.width, height: window.size.height)
                     }
                 )
-                .frame(width: window.size.width, height: borderlessFullScreenWidgets ? window.size.height : window.size.height + 28)
+                .frame(
+                    width: window.size.width,
+                    height: widgetManager.borderlessFullScreenWidgets ? window.size.height : window.size.height + 28
+                )
                 .transition(.opacity)
             }
         }

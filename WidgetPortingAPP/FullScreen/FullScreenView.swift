@@ -293,8 +293,14 @@ struct FullScreenBackgroundView: View {
                     .padding(.vertical)
                     .frame(maxWidth: .infinity, alignment: .top) // grow downward only
                     .background(
-                        Image(nsImage: NSImage(named: "ecsb_background_tile")!)
-                            .resizable(resizingMode: .tile)
+                        Group {
+                            if let bg = NSImage(named: "ecsb_background_tile") {
+                                Image(nsImage: bg)
+                                    .resizable(resizingMode: .tile)
+                            } else {
+                                Color.black.opacity(0.2)
+                            }
+                        }
                     )
                     .tint(.white)
                     .overlay(

@@ -92,13 +92,67 @@ struct AppInfo: Identifiable, Hashable {
 // MARK: - ViewModel
 @MainActor
 class WidgetManager: ObservableObject {
-    @AppStorage("supportDirectoryPath") var supportDirectoryPath: String = ""
-    @AppStorage("defaultWidgetLanguage") var defaultWidgetLanguage: String = ""
-    @AppStorage("silentMode") var silentMode = false
-    @AppStorage("autoOpenWidgetOnInstall") var autoOpenWidgetOnInstall = true
-    @AppStorage("portableMode") var portableMode = false
-    @AppStorage("borderlessFullScreenWidgets") var borderlessFullScreenWidgets: Bool = true
-    @AppStorage("allowMultipleInstances") var allowMultipleInstances: Bool = false
+    static let shared = WidgetManager()
+
+    private enum DefaultsKey {
+        static let hasCompletedOOBE = "hasCompletedOOBE"
+        static let defaultLaunchFullScreen = "defaultLaunchFullScreen"
+        static let supportDirectoryPath = "supportDirectoryPath"
+        static let defaultWidgetLanguage = "defaultWidgetLanguage"
+        static let silentMode = "silentMode"
+        static let autoOpenWidgetOnInstall = "autoOpenWidgetOnInstall"
+        static let portableMode = "portableMode"
+        static let borderlessFullScreenWidgets = "borderlessFullScreenWidgets"
+        static let allowMultipleInstances = "allowMultipleInstances"
+    }
+
+    private let defaults: UserDefaults
+
+    @Published var hasCompletedOOBE: Bool {
+        didSet {
+            defaults.set(hasCompletedOOBE, forKey: DefaultsKey.hasCompletedOOBE)
+        }
+    }
+    @Published var defaultLaunchFullScreen: Bool {
+        didSet {
+            defaults.set(defaultLaunchFullScreen, forKey: DefaultsKey.defaultLaunchFullScreen)
+        }
+    }
+    @Published var supportDirectoryPath: String {
+        didSet {
+            defaults.set(supportDirectoryPath, forKey: DefaultsKey.supportDirectoryPath)
+        }
+    }
+    @Published var defaultWidgetLanguage: String {
+        didSet {
+            defaults.set(defaultWidgetLanguage, forKey: DefaultsKey.defaultWidgetLanguage)
+        }
+    }
+    @Published var silentMode: Bool {
+        didSet {
+            defaults.set(silentMode, forKey: DefaultsKey.silentMode)
+        }
+    }
+    @Published var autoOpenWidgetOnInstall: Bool {
+        didSet {
+            defaults.set(autoOpenWidgetOnInstall, forKey: DefaultsKey.autoOpenWidgetOnInstall)
+        }
+    }
+    @Published var portableMode: Bool {
+        didSet {
+            defaults.set(portableMode, forKey: DefaultsKey.portableMode)
+        }
+    }
+    @Published var borderlessFullScreenWidgets: Bool {
+        didSet {
+            defaults.set(borderlessFullScreenWidgets, forKey: DefaultsKey.borderlessFullScreenWidgets)
+        }
+    }
+    @Published var allowMultipleInstances: Bool {
+        didSet {
+            defaults.set(allowMultipleInstances, forKey: DefaultsKey.allowMultipleInstances)
+        }
+    }
     @Published var appInfos: [AppInfo] = []
     @Published var selectedLanguages: [String: String] = [:]
     @Published private(set) var tweaksPerBundle: [String: WidgetTweaks] = [:]
@@ -110,7 +164,18 @@ class WidgetManager: ObservableObject {
     @Published var loadingProgressDenominator: Int = 0     // Total number of widgets to load
     private var loadingWindow: NSWindow? = nil             // Reference to the loading progress window
 
-    init() {
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.hasCompletedOOBE = Self.readBool(defaults, key: DefaultsKey.hasCompletedOOBE, defaultValue: false)
+        self.defaultLaunchFullScreen = Self.readBool(defaults, key: DefaultsKey.defaultLaunchFullScreen, defaultValue: false)
+        self.supportDirectoryPath = defaults.string(forKey: DefaultsKey.supportDirectoryPath) ?? ""
+        self.defaultWidgetLanguage = defaults.string(forKey: DefaultsKey.defaultWidgetLanguage) ?? ""
+        self.silentMode = Self.readBool(defaults, key: DefaultsKey.silentMode, defaultValue: false)
+        self.autoOpenWidgetOnInstall = Self.readBool(defaults, key: DefaultsKey.autoOpenWidgetOnInstall, defaultValue: true)
+        self.portableMode = Self.readBool(defaults, key: DefaultsKey.portableMode, defaultValue: false)
+        self.borderlessFullScreenWidgets = Self.readBool(defaults, key: DefaultsKey.borderlessFullScreenWidgets, defaultValue: true)
+        self.allowMultipleInstances = Self.readBool(defaults, key: DefaultsKey.allowMultipleInstances, defaultValue: false)
+
         // make sure as base exists
         do {
             try FileManager.default.createDirectory(at: Self.applicationSupportBaseURL(), withIntermediateDirectories: true, attributes: nil)
@@ -127,6 +192,11 @@ class WidgetManager: ObservableObject {
         
         // Load persisted language selections
         loadSelectedLanguages()
+    }
+
+    private static func readBool(_ defaults: UserDefaults, key: String, defaultValue: Bool) -> Bool {
+        guard defaults.object(forKey: key) != nil else { return defaultValue }
+        return defaults.bool(forKey: key)
     }
     
     @MainActor
@@ -338,6 +408,7 @@ class WidgetManager: ObservableObject {
     
     func openDefaultLanguageSetting() {
         let popupView = DefaultLanguagePopup()
+            .environmentObject(self)
         let hosting = NSHostingController(rootView: popupView)
 
         let window = NSWindow(contentViewController: hosting)
@@ -347,6 +418,21 @@ class WidgetManager: ObservableObject {
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.makeKeyAndOrderFront(nil)
         window.level = .floating
+    }
+    
+    func handleOpenedWidgetURL(_ folderURL: URL) {
+        guard folderURL.lastPathComponent != "-NSDocumentRevisionsDebugMode" else { return } // xcode temp dir
+        guard folderURL.pathExtension.lowercased() == "wdgt" else { return }
+        
+        if silentMode {
+            if portableMode {
+                loadWidget(from: folderURL, openWindow: autoOpenWidgetOnInstall)
+            } else if let (dest, shortUUID) = installWidget(from: folderURL) {
+                loadWidget(from: dest, openWindow: autoOpenWidgetOnInstall, id: shortUUID)
+            }
+        } else if let info = parsePlist(from: folderURL, showError: showError) {
+            openInstallWindow(with: info, folderURL: folderURL)
+        }
     }
 
     // MARK: - Drop handling
@@ -359,23 +445,8 @@ class WidgetManager: ObservableObject {
                     guard let data = item as? Data,
                           let folderURL = URL(dataRepresentation: data, relativeTo: nil) else { return }
 
-                    // Install widget into app container then load it
                     Task { @MainActor in
-                        guard folderURL.lastPathComponent != "-NSDocumentRevisionsDebugMode" else { return } // xcode shit
-                        
-                        if self.silentMode {
-                            if self.portableMode {
-                                self.loadWidget(from: folderURL, openWindow: self.autoOpenWidgetOnInstall)
-                            } else {
-                                if let (dest, shortUUID) = self.installWidget(from: folderURL) {
-                                    self.loadWidget(from: dest, openWindow: self.autoOpenWidgetOnInstall, id: shortUUID)
-                                }
-                            }
-                        } else {
-                            if let info = parsePlist(from: folderURL, showError: self.showError)  {
-                                self.openInstallWindow(with: info, folderURL: folderURL)
-                            }
-                        }
+                        self.handleOpenedWidgetURL(folderURL)
                     }
                 }
                 handled = true
@@ -758,7 +829,6 @@ class WidgetManager: ObservableObject {
     func clearPreferences(for appInfo: AppInfo) {
         let namespace = "WidgetPrefs::" + appInfo.bundleIdentifier + "_" + appInfo.id
         UserDefaults.standard.removeObject(forKey: namespace)
-        UserDefaults.standard.synchronize()
     }
     
     private func showError(_ message: String) {
@@ -783,4 +853,3 @@ class WidgetManager: ObservableObject {
         alert.runModal()
     }
 }
-

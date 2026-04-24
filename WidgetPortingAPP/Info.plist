@@ -2,6 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>wdgt</string>
+			</array>
+			<key>CFBundleTypeIconFile</key>
+			<string>WidgetDocument</string>
+			<key>CFBundleTypeName</key>
+			<string>Dashboard Widget</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.apple.dashboard-widget</string>
+			</array>
+			<key>LSTypeIsPackage</key>
+			<true/>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>
@@ -9,5 +32,25 @@
 	</dict>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>This permission is required to switch to the next desktop.</string>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>com.apple.package</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Dashboard Widget</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.apple.dashboard-widget</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>wdgt</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

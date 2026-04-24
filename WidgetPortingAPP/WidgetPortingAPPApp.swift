@@ -7,38 +7,117 @@
 
 import SwiftUI
 
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+    let widgetManager = WidgetManager.shared
+    private var mainWindow: NSWindow?
+    private var openedWidgetDuringLaunch = false
+    private var hasPresentedMainWindow = false
+    
+    private var hasCompletedOOBE: Bool {
+        widgetManager.hasCompletedOOBE
+    }
+    
+    private func isWidgetURL(_ url: URL) -> Bool {
+        url.lastPathComponent != "-NSDocumentRevisionsDebugMode" && url.pathExtension.lowercased() == "wdgt"
+    }
+    
+    private func openWidgetURLs(_ urls: [URL]) -> Bool {
+        let widgetURLs = urls.filter(isWidgetURL)
+        guard !widgetURLs.isEmpty else { return false }
+        
+        openedWidgetDuringLaunch = true
+        for url in widgetURLs {
+            widgetManager.handleOpenedWidgetURL(url)
+        }
+        return true
+    }
+    
+    private func makeMainWindow() -> NSWindow {
+        let rootView = AppRootView()
+            .environmentObject(widgetManager)
+        let hosting = NSHostingController(rootView: rootView)
+        
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Widget Porting Toolkit"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.minSize = NSSize(width: 400, height: 180)
+        window.setContentSize(NSSize(width: 720, height: 520))
+        window.center()
+        window.delegate = self
+        window.setFrameAutosaveName("MainWindow")
+        return window
+    }
+    
+    private func showMainWindow() {
+        let window = mainWindow ?? makeMainWindow()
+        mainWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        if !hasPresentedMainWindow {
+            hasPresentedMainWindow = true
+            scheduleStartupWindows(for: window)
+        }
+    }
+    
+    private func scheduleStartupWindows(for window: NSWindow) {
+        if !hasCompletedOOBE {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self.widgetManager.openOOBEWindow()
+            }
+        } else if widgetManager.defaultLaunchFullScreen {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard !window.styleMask.contains(.fullScreen) else { return }
+                window.toggleFullScreen(nil)
+            }
+        }
+    }
+    
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if !openedWidgetDuringLaunch {
+            showMainWindow()
+        }
+    }
+    
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            showMainWindow()
+        }
+        return true
+    }
+    
+    func windowWillClose(_ notification: Notification) {
+        if let window = notification.object as? NSWindow, window == mainWindow {
+            mainWindow = nil
+        }
+    }
+    
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        _ = openWidgetURLs(urls)
+    }
+    
+    func application(_ sender: NSApplication, openFile filename: String) -> Bool {
+        let url = URL(fileURLWithPath: filename)
+        return openWidgetURLs([url])
+    }
+    
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        let urls = filenames.map { URL(fileURLWithPath: $0) }
+        _ = openWidgetURLs(urls)
+        sender.reply(toOpenOrPrint: .success)
+    }
+}
+
 @main
 struct WidgetPortingAPPApp: App {
-    @StateObject private var widgetManager = WidgetManager()
-    @AppStorage("defaultLaunchFullScreen") var defaultLaunchFullScreen: Bool = false
-    @AppStorage("defaultWidgetLanguage") var defaultLanguage: String = ""
-    @AppStorage("borderlessFullScreenWidgets") var borderlessFullScreenWidgets: Bool = true
-    @AppStorage("hasCompletedOOBE") private var hasCompletedOOBE: Bool = false
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @StateObject private var widgetManager = WidgetManager.shared
 
     var body: some Scene {
-        WindowGroup {
-            AppRootView()
-                .navigationTitle("Widget Porting Toolkit")
-                .environmentObject(widgetManager)
-                .onAppear {
-                    // OOBE on first launch
-                    if !hasCompletedOOBE {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            widgetManager.openOOBEWindow()
-                        }
-                    } else if defaultLaunchFullScreen {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            // Find the main app window
-                            if let window = NSApplication.shared.windows.first(where: { 
-                                $0.title == "Widget Porting Toolkit" || $0.contentViewController is NSHostingController<AppRootView>
-                            }) {
-                                if !window.styleMask.contains(.fullScreen) {
-                                    window.toggleFullScreen(nil)
-                                }
-                            }
-                        }
-                    }
-                }
+        Settings {
+            EmptyView()
         }
         .commands {
             CommandGroup(replacing: CommandGroupPlacement.appInfo) {
@@ -46,6 +125,9 @@ struct WidgetPortingAPPApp: App {
                     openAboutWindow()
                 }
                 .keyboardShortcut(",", modifiers: [.command])
+            }
+
+            CommandGroup(replacing: .appSettings) {
             }
             
             CommandMenu("Options") {
@@ -56,8 +138,8 @@ struct WidgetPortingAPPApp: App {
                 
                 Divider()
 
-                Toggle("Launch in Full Screen by Default", isOn: $defaultLaunchFullScreen)
-                Toggle("Borderless Widgets", isOn: $borderlessFullScreenWidgets)
+                Toggle("Launch in Full Screen by Default", isOn: $widgetManager.defaultLaunchFullScreen)
+                Toggle("Borderless Widgets", isOn: $widgetManager.borderlessFullScreenWidgets)
                 Toggle("Allow multiple instances of the same widget", isOn: $widgetManager.allowMultipleInstances)
 
                 Divider()
@@ -102,7 +184,6 @@ struct WidgetPortingAPPApp: App {
                         // Reset UserDefaults
                         if let bundleID = Bundle.main.bundleIdentifier {
                             UserDefaults.standard.removePersistentDomain(forName: bundleID)
-                            UserDefaults.standard.synchronize()
                         }
                         
                         // Restart the app
