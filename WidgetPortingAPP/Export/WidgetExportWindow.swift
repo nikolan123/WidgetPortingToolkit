@@ -121,8 +121,20 @@ struct WidgetExportWindow: View {
                 .font(.system(size: 36, weight: .semibold))
                 .foregroundStyle(Color.accentColor)
 
-            Text("Widget Exporter")
-                .font(.title3.weight(.semibold))
+            VStack(spacing: 4) {
+                Text("Widget Exporter")
+                    .font(.title3.weight(.semibold))
+
+                Text("EXPERIMENTAL")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .foregroundStyle(.white)
+                    .background(
+                        Capsule()
+                            .fill(Color.orange)
+                    )
+            }
 
             Text("Drop a .wdgt bundle to create a portable widget package.")
                 .font(.subheadline)
