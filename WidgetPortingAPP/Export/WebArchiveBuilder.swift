@@ -76,7 +76,7 @@ enum WebArchiveBuilder {
                 relativePath: relativePath,
                 baseURL: baseURL,
                 frameName: nil,
-                includeResponse: true
+                includeResponse: false
             )
             subresources.append(resource)
         }

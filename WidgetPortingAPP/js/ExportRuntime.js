@@ -209,6 +209,79 @@
         "systemCommand"
     ];
 
+    if (!window.TimeZoneInfo) {
+        function tzPartsForZone(tz) {
+            try {
+                var fmt = new Intl.DateTimeFormat("en-US", {
+                    timeZone: tz || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    hour12: false,
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit"
+                });
+                var parts = fmt.formatToParts(new Date());
+                var h = Number((parts.find(function (p) { return p.type === "hour"; }) || {}).value || 0);
+                var m = Number((parts.find(function (p) { return p.type === "minute"; }) || {}).value || 0);
+                var s = Number((parts.find(function (p) { return p.type === "second"; }) || {}).value || 0);
+                return { hours: h, minutes: m, seconds: s };
+            } catch (e) {
+                var d = new Date();
+                return { hours: d.getHours(), minutes: d.getMinutes(), seconds: d.getSeconds() };
+            }
+        }
+
+        function encodeHMS(parts) {
+            var h = Number(parts.hours || 0);
+            var m = Number(parts.minutes || 0);
+            var s = Number(parts.seconds || 0);
+            return h * 10000 + m * 100 + s;
+        }
+
+        function offsetForZone(tz) {
+            try {
+                var parts = new Intl.DateTimeFormat("en-US", {
+                    timeZone: tz || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timeZoneName: "shortOffset"
+                }).formatToParts(new Date());
+                var zonePart = (parts.find(function (p) { return p.type === "timeZoneName"; }) || {}).value || "";
+                var match = zonePart.match(/^GMT([+-])(\d{1,2})(?::?(\d{2}))?$/);
+                if (match) {
+                    var sign = match[1] === "+" ? 1 : -1;
+                    var hh = Number(match[2] || 0);
+                    var mm = Number(match[3] || 0);
+                    var total = hh * 60 + mm;
+                    return sign === 1 ? -total : total;
+                }
+            } catch (e) {}
+            return new Date().getTimezoneOffset();
+        }
+
+        function defaultContinentName() {
+            try {
+                var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+                var continent = String(tz).split("/")[0] || "North America";
+                return continent.replace(/_/g, " ");
+            } catch (e) {
+                return "North America";
+            }
+        }
+
+        window.TimeZoneInfo = {
+            getDefaultContinentName: function () { return defaultContinentName(); },
+            getDefaultGeoID: function () { return 0; },
+            getDefaultTimeZoneOffset: function () { return new Date().getTimezoneOffset(); },
+            currentTimeForTimeZone: function (tz) { return encodeHMS(tzPartsForZone(tz)); },
+            getLocalizedTime: function (tz) {
+                try {
+                    return new Date().toLocaleTimeString([], tz ? { timeZone: tz } : undefined);
+                } catch (e) {
+                    return new Date().toLocaleTimeString();
+                }
+            },
+            getTimezoneOffsetForTimezoneName: function (tz) { return offsetForZone(tz); }
+        };
+    }
+
     function patchWidgetPreferenceAPI() {
         if (!window.widget) return false;
         var originalPreferenceForKey = window.widget.preferenceForKey;

@@ -109,7 +109,7 @@ enum WidgetExporter {
         }
 
         step("Patching HTML/JS/CSS paths…")
-        try patchWidgetFilesForExport(in: exportFolder)
+        try patchWidgetFilesForExport(in: exportFolder, mainHTMLPath: parsed.mainHTML)
 
         step("Preparing runtime JavaScript files…")
         try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
@@ -202,9 +202,19 @@ enum WidgetExporter {
         }
     }
 
-    private static func patchWidgetFilesForExport(in folder: URL) throws {
+    private static func patchWidgetFilesForExport(in folder: URL, mainHTMLPath: String) throws {
         let fm = FileManager.default
         let allowedExtensions = Set(["html", "js", "css"])
+        let supportDirectoryURL = folder.appendingPathComponent("SupportDirectory", isDirectory: true)
+        let mainDocumentDirectory = folder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
+        let supportPathForDocument = relativePath(
+            fromDirectory: mainDocumentDirectory,
+            toDirectory: supportDirectoryURL
+        )
+        let rootPathForDocument = relativePath(
+            fromDirectory: mainDocumentDirectory,
+            toDirectory: folder
+        )
         guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else {
             throw WidgetExportError.fileOperationFailed("Failed to enumerate export folder.")
         }
@@ -217,8 +227,7 @@ enum WidgetExporter {
             do {
                 let original = try String(contentsOf: fileURL, encoding: .utf8)
                 var content = original
-                let prefix = relativePrefix(from: fileURL.deletingLastPathComponent(), toRoot: folder)
-                let supportPathForFile = "\(prefix)SupportDirectory"
+                let supportPathForFile = supportPathForDocument
 
                 content = content.replacingOccurrences(
                     of: "file:///System/Library/WidgetResources",
@@ -229,12 +238,32 @@ enum WidgetExporter {
                     with: supportPathForFile
                 )
                 content = content.replacingOccurrences(
+                    of: #"file:///Users/.+?/SupportDirectory"#,
+                    with: supportPathForFile,
+                    options: .regularExpression
+                )
+                content = content.replacingOccurrences(
+                    of: #"/Users/.+?/SupportDirectory"#,
+                    with: supportPathForFile,
+                    options: .regularExpression
+                )
+                content = content.replacingOccurrences(
+                    of: #"file://~/SupportDirectory"#,
+                    with: supportPathForFile,
+                    options: .regularExpression
+                )
+                content = content.replacingOccurrences(
+                    of: #"~/SupportDirectory"#,
+                    with: supportPathForFile,
+                    options: .regularExpression
+                )
+                content = content.replacingOccurrences(
                     of: "\"AppleClasses",
                     with: "\"\(supportPathForFile)/AppleClasses"
                 )
                 content = content.replacingOccurrences(
                     of: #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#,
-                    with: "\(prefix)$1",
+                    with: "\(rootPathForDocument)$1",
                     options: .regularExpression
                 )
 
@@ -329,6 +358,31 @@ enum WidgetExporter {
             return "./"
         }
         return String(repeating: "../", count: depth)
+    }
+
+    private static func relativePath(fromDirectory source: URL, toDirectory target: URL) -> String {
+        let src = source.standardizedFileURL.pathComponents
+        let dst = target.standardizedFileURL.pathComponents
+        var common = 0
+        while common < src.count && common < dst.count && src[common] == dst[common] {
+            common += 1
+        }
+
+        let upCount = max(0, src.count - common)
+        let up = String(repeating: "../", count: upCount)
+        let downParts = Array(dst.dropFirst(common))
+        let down = downParts.joined(separator: "/")
+
+        if up.isEmpty && down.isEmpty {
+            return "./"
+        }
+        if up.isEmpty {
+            return "./" + down
+        }
+        if down.isEmpty {
+            return up.hasSuffix("/") ? String(up.dropLast()) : up
+        }
+        return up + down
     }
 
     private static func sanitizeExportFolder(at root: URL) throws {
