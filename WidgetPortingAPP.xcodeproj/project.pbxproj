@@ -38,6 +38,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2334E0AD2F9C0DAC0017559C /* WidgetPlayerTemplate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WidgetPlayerTemplate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		235001B32EE6F467005CC171 /* Logo.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; path = Logo.icon; sourceTree = "<group>"; };
 		237BD6EC2E6EF3EF008AD8A6 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetQuickLook.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -63,6 +64,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		2334E0AE2F9C0DAC0017559C /* WidgetPlayerTemplate */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WidgetPlayerTemplate;
+			sourceTree = "<group>";
+		};
 		23D4813F2F983B5A008E756A /* WidgetQuickLook */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -82,6 +88,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2334E0AA2F9C0DAC0017559C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		23D481382F983B5A008E756A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -115,6 +128,7 @@
 				235001B32EE6F467005CC171 /* Logo.icon */,
 				23DF79E32E6DEC0B007D5A01 /* WidgetPortingAPP */,
 				23D4813F2F983B5A008E756A /* WidgetQuickLook */,
+				2334E0AE2F9C0DAC0017559C /* WidgetPlayerTemplate */,
 				23D4813C2F983B5A008E756A /* Frameworks */,
 				23DF79E22E6DEC0B007D5A01 /* Products */,
 			);
@@ -125,6 +139,7 @@
 			children = (
 				23DF79E12E6DEC0B007D5A01 /* Widget Porting Toolkit.app */,
 				23D4813B2F983B5A008E756A /* WidgetQuickLook.appex */,
+				2334E0AD2F9C0DAC0017559C /* WidgetPlayerTemplate.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -132,6 +147,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		2334E0AC2F9C0DAC0017559C /* WidgetPlayerTemplate */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2334E0B72F9C0DAD0017559C /* Build configuration list for PBXNativeTarget "WidgetPlayerTemplate" */;
+			buildPhases = (
+				2334E0A92F9C0DAC0017559C /* Sources */,
+				2334E0AA2F9C0DAC0017559C /* Frameworks */,
+				2334E0AB2F9C0DAC0017559C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2334E0AE2F9C0DAC0017559C /* WidgetPlayerTemplate */,
+			);
+			name = WidgetPlayerTemplate;
+			packageProductDependencies = (
+			);
+			productName = WidgetPlayerTemplate;
+			productReference = 2334E0AD2F9C0DAC0017559C /* WidgetPlayerTemplate.app */;
+			productType = "com.apple.product-type.application";
+		};
 		23D4813A2F983B5A008E756A /* WidgetQuickLook */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 23D4814E2F983B5A008E756A /* Build configuration list for PBXNativeTarget "WidgetQuickLook" */;
@@ -190,6 +227,9 @@
 				LastSwiftUpdateCheck = 2640;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					2334E0AC2F9C0DAC0017559C = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 					23D4813A2F983B5A008E756A = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
@@ -214,11 +254,19 @@
 			targets = (
 				23DF79E02E6DEC0B007D5A01 /* Widget Porting Toolkit */,
 				23D4813A2F983B5A008E756A /* WidgetQuickLook */,
+				2334E0AC2F9C0DAC0017559C /* WidgetPlayerTemplate */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2334E0AB2F9C0DAC0017559C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		23D481392F983B5A008E756A /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -279,6 +327,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		2334E0A92F9C0DAC0017559C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		23D481372F983B5A008E756A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -304,6 +359,68 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		2334E0B52F9C0DAD0017559C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPlayerTemplate;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2334E0B62F9C0DAD0017559C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.4;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.niko.WidgetPlayerTemplate;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		23D4814C2F983B5A008E756A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -553,6 +670,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		2334E0B72F9C0DAD0017559C /* Build configuration list for PBXNativeTarget "WidgetPlayerTemplate" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2334E0B52F9C0DAD0017559C /* Debug */,
+				2334E0B62F9C0DAD0017559C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		23D4814E2F983B5A008E756A /* Build configuration list for PBXNativeTarget "WidgetQuickLook" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
