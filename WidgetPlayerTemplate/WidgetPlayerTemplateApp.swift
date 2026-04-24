@@ -19,6 +19,16 @@ struct WidgetPlayerTemplateApp: App {
             EmptyView()
         }
         .commands {
+            CommandGroup(replacing: CommandGroupPlacement.appInfo) {
+                Button("About \(aboutDisplayName)") {
+                    guard let config = appDelegate.currentConfig else { return }
+                    openTemplateAboutWindow(config: config)
+                }
+            }
+
+            CommandGroup(replacing: .appSettings) {
+            }
+
             CommandMenu("Options") {
                 Toggle("Recreate Dashboard API", isOn: binding(\.recreateDashboardAPI))
                 Toggle("Allow system command execution", isOn: binding(\.allowSystemCommands))
@@ -45,6 +55,13 @@ struct WidgetPlayerTemplateApp: App {
             set: { runtimeSettings[keyPath: keyPath] = $0 }
         )
     }
+
+    private var aboutDisplayName: String {
+        appDelegate.currentConfig?.displayName
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+            ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+            ?? "Widget"
+    }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
@@ -53,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var flagsMonitor: Any?
     private let runtimeSettings = TemplateRuntimeSettings.shared
     private var cancellables = Set<AnyCancellable>()
-    private var currentConfig: WidgetConfig?
+    var currentConfig: WidgetConfig?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let config = WidgetConfigLoader.load() else {
