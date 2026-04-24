@@ -18,7 +18,7 @@
     <img height="50" alt="Download Button" src=".github/assets/download_button.png" />
   </a>
   <br>
-  macOS 12.0 or later. Intel & Apple Silicon. Nightly build
+  macOS 12.0 or later<a href="./.github/OTHEROS.md">*</a>. Intel & Apple Silicon. Nightly build
 </p>
 
 <p align="center">
