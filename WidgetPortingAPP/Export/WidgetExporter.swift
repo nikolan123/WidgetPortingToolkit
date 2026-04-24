@@ -238,26 +238,6 @@ enum WidgetExporter {
                     with: supportPathForFile
                 )
                 content = content.replacingOccurrences(
-                    of: #"file:///Users/.+?/SupportDirectory"#,
-                    with: supportPathForFile,
-                    options: .regularExpression
-                )
-                content = content.replacingOccurrences(
-                    of: #"/Users/.+?/SupportDirectory"#,
-                    with: supportPathForFile,
-                    options: .regularExpression
-                )
-                content = content.replacingOccurrences(
-                    of: #"file://~/SupportDirectory"#,
-                    with: supportPathForFile,
-                    options: .regularExpression
-                )
-                content = content.replacingOccurrences(
-                    of: #"~/SupportDirectory"#,
-                    with: supportPathForFile,
-                    options: .regularExpression
-                )
-                content = content.replacingOccurrences(
                     of: "\"AppleClasses",
                     with: "\"\(supportPathForFile)/AppleClasses"
                 )
