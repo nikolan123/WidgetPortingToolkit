@@ -54,7 +54,7 @@
       <EnvironmentVariables>
          <EnvironmentVariable
             key = "WPT_WIDGET_DEV_ROOT"
-            value = "/Users/niko/Documents/code/widgetporting/BART.app/Contents/Resources/widget"
+            value = "/Users/niko/Documents/code/widgetporting/HSLider.app/Contents/Resources/widget"
             isEnabled = "YES">
          </EnvironmentVariable>
       </EnvironmentVariables>

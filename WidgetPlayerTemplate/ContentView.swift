@@ -7,6 +7,7 @@
 
 import AppKit
 import WebKit
+import Combine
 
 struct WidgetConfig {
     let widgetRoot: URL
@@ -100,16 +101,19 @@ enum WidgetConfigLoader {
 final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler, WKNavigationDelegate {
     let config: WidgetConfig
     private let prefsNamespace: String
+    private let runtimeSettings: TemplateRuntimeSettings
     private var transitionDirection: String?
     private let processQueue = DispatchQueue(label: "WidgetPlayerTemplate.systemCommand")
     private var runningProcesses: [String: Process] = [:]
     private var outputBuffers: [String: String] = [:]
+    private var cancellables = Set<AnyCancellable>()
 
     private(set) var webView: WKWebView!
 
-    init(config: WidgetConfig) {
+    init(config: WidgetConfig, runtimeSettings: TemplateRuntimeSettings = .shared) {
         self.config = config
         self.prefsNamespace = "WidgetPrefs::\(config.bundleIdentifier)"
+        self.runtimeSettings = runtimeSettings
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -131,7 +135,6 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
 
         let webView = WKWebView(frame: .zero, configuration: webConfig)
         webView.navigationDelegate = self
-        webView.setValue(false, forKey: "drawsBackground")
         webView.translatesAutoresizingMaskIntoConstraints = false
 
         let container = NSView(frame: .zero)
@@ -147,14 +150,24 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
 
         self.webView = webView
         self.view = container
+        applyWebViewBackground(for: webView)
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        runtimeSettings.$transparentBackground
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.applyWebViewBackground(for: self.webView)
+            }
+            .store(in: &cancellables)
         webView.loadFileURL(config.entryURL, allowingReadAccessTo: config.widgetRoot)
     }
 
     private func injectDashboardScripts(into controller: WKUserContentController) {
+        guard runtimeSettings.recreateDashboardAPI else { return }
+
         let prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
         let prefsData = (try? JSONSerialization.data(withJSONObject: prefs, options: [])) ?? Data()
         let prefsJSON = String(data: prefsData, encoding: .utf8) ?? "{}"
@@ -174,7 +187,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
             )
         }
 
-        if let systemInject = loadBundledJS(named: "SystemInject") {
+        if runtimeSettings.allowSystemCommands, let systemInject = loadBundledJS(named: "SystemInject") {
             controller.addUserScript(
                 WKUserScript(source: systemInject, injectionTime: .atDocumentStart, forMainFrameOnly: true)
             )
@@ -182,6 +195,8 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     }
 
     private func injectCSSTweaks(into controller: WKUserContentController) {
+        guard runtimeSettings.injectCSS else { return }
+
         if let injectCSS = loadBundledJS(named: "InjectCSS") {
             controller.addUserScript(
                 WKUserScript(source: injectCSS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
@@ -196,7 +211,6 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
           s.type = 'text/css';
           s.appendChild(document.createTextNode(`
         * { -webkit-user-drag: none; -webkit-user-select: none; }
-        *[src*="SupportDirectory/"][src*="button"], *[style*="SupportDirectory/"][style*="button"] { cursor: pointer; }
         html, body {
           overflow: hidden !important;
           margin: 0 !important;
@@ -211,6 +225,11 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         controller.addUserScript(
             WKUserScript(source: fallback, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         )
+    }
+
+    private func applyWebViewBackground(for webView: WKWebView) {
+        webView.setValue(runtimeSettings.transparentBackground ? false : true, forKey: "drawsBackground")
+        view.layer?.backgroundColor = runtimeSettings.transparentBackground ? NSColor.clear.cgColor : NSColor.windowBackgroundColor.cgColor
     }
 
     private func loadBundledJS(named name: String) -> String? {
@@ -253,7 +272,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
                   let height = readCGFloat(dict["height"]),
                   let window = webView.window else { return }
 
-            let oldSize = window.contentLayoutRect.size
+            let oldSize = currentViewportSize(in: window)
             let newSize = NSSize(width: max(1, width), height: max(1, height))
 
             let steps = 15
@@ -273,6 +292,10 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
             guard let dict = message.body as? [String: Any],
                   let action = dict["action"] as? String,
                   let token = dict["token"] as? String else { return }
+            guard runtimeSettings.allowSystemCommands else {
+                emitSystemOutput(token: token, text: "System command execution is disabled.\n", done: true, status: 126)
+                return
+            }
             if action == "cancel" {
                 cancelSystemCommand(token: token)
                 return
@@ -289,6 +312,13 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         if let number = value as? NSNumber { return CGFloat(truncating: number) }
         if let text = value as? String, let number = Double(text) { return CGFloat(number) }
         return nil
+    }
+
+    private func currentViewportSize(in window: NSWindow) -> NSSize {
+        if let contentView = window.contentView {
+            return contentView.bounds.size
+        }
+        return window.contentRect(forFrameRect: window.frame).size
     }
 
     private func performFlip(direction: String) {
@@ -358,19 +388,19 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     }
 
     private func promptForSystemCommand(command: String) -> Bool {
-        var allowed = false
-        DispatchQueue.main.sync {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "'\(config.displayName)' wants to run a system command."
-            alert.informativeText = command
-            alert.addButton(withTitle: "Allow")
-            alert.addButton(withTitle: "Deny")
-            alert.buttons.first?.keyEquivalent = "\r"
-            alert.buttons.last?.keyEquivalent = "\u{1b}"
-            allowed = (alert.runModal() == .alertFirstButtonReturn)
+        if runtimeSettings.noAskSystemCommands {
+            return true
         }
-        return allowed
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "'\(config.displayName)' wants to run a system command."
+        alert.informativeText = command
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Deny")
+        alert.buttons.first?.keyEquivalent = "\r"
+        alert.buttons.last?.keyEquivalent = "\u{1b}"
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func emitSystemOutput(token: String, text: String, done: Bool, status: Int) {

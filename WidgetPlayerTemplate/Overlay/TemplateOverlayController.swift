@@ -126,7 +126,7 @@ final class TemplateOverlayController {
         case .leftMouseDown:
             if inResizeCorner {
                 initialMouseLocation = mouseInScreen
-                initialContentSize = parent.contentLayoutRect.size
+                initialContentSize = currentViewportSize(in: parent)
                 isResizing = true
                 state.isResizing = true
                 state.currentSize = initialContentSize
@@ -149,6 +149,13 @@ final class TemplateOverlayController {
         default:
             break
         }
+    }
+
+    private func currentViewportSize(in window: NSWindow) -> CGSize {
+        if let contentView = window.contentView {
+            return contentView.bounds.size
+        }
+        return window.contentRect(forFrameRect: window.frame).size
     }
 
     func cleanup() {

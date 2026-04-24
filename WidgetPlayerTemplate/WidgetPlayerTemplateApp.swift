@@ -7,15 +7,43 @@
 
 import SwiftUI
 import AppKit
+import Combine
 
 @main
 struct WidgetPlayerTemplateApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @ObservedObject private var runtimeSettings = TemplateRuntimeSettings.shared
 
     var body: some Scene {
         Settings {
             EmptyView()
         }
+        .commands {
+            CommandMenu("Options") {
+                Toggle("Recreate Dashboard API", isOn: binding(\.recreateDashboardAPI))
+                Toggle("Allow system command execution", isOn: binding(\.allowSystemCommands))
+                Toggle("Don't ask when running system commands", isOn: binding(\.noAskSystemCommands))
+                    .disabled(!runtimeSettings.allowSystemCommands)
+
+                Divider()
+
+                Toggle("Inject helper CSS", isOn: binding(\.injectCSS))
+                Toggle("Transparent background", isOn: binding(\.transparentBackground))
+                Toggle("Use native window shadow", isOn: binding(\.useNativeShadow))
+
+                Divider()
+
+                Toggle("Always on Top", isOn: binding(\.alwaysOnTop))
+                Toggle("Hide Titlebar", isOn: binding(\.hideTitlebar))
+            }
+        }
+    }
+
+    private func binding(_ keyPath: ReferenceWritableKeyPath<TemplateRuntimeSettings, Bool>) -> Binding<Bool> {
+        Binding(
+            get: { runtimeSettings[keyPath: keyPath] },
+            set: { runtimeSettings[keyPath: keyPath] = $0 }
+        )
     }
 }
 
@@ -23,6 +51,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var window: NSWindow?
     private var overlayController: TemplateOverlayController?
     private var flagsMonitor: Any?
+    private let runtimeSettings = TemplateRuntimeSettings.shared
+    private var cancellables = Set<AnyCancellable>()
+    private var currentConfig: WidgetConfig?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let config = WidgetConfigLoader.load() else {
@@ -35,7 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let widgetController = WidgetPlayerViewController(config: config)
+        currentConfig = config
+
+        let widgetController = WidgetPlayerViewController(config: config, runtimeSettings: runtimeSettings)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: config.width, height: config.height),
             styleMask: [.titled, .closable, .miniaturizable],
@@ -45,6 +78,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = config.displayName
         window.contentViewController = widgetController
         window.setContentSize(NSSize(width: config.width, height: config.height))
+        applyWindowChrome(to: window)
+        applyWindowLevel(to: window)
+        applyWindowShadow(to: window)
+        applyWindowTransparency(to: window)
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -57,6 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlayController?.handleOptionKey(held: event.modifierFlags.contains(.option))
             return event
         }
+
+        bindRuntimeSettings()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -66,5 +105,107 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         overlayController?.cleanup()
         overlayController = nil
+    }
+
+    private func bindRuntimeSettings() {
+        Publishers.Merge3(
+            runtimeSettings.$recreateDashboardAPI.map { _ in () },
+            runtimeSettings.$allowSystemCommands.map { _ in () },
+            runtimeSettings.$injectCSS.map { _ in () }
+        )
+        .dropFirst()
+        .receive(on: RunLoop.main)
+        .sink { [weak self] in
+            self?.reloadWidgetController()
+        }
+        .store(in: &cancellables)
+
+        runtimeSettings.$alwaysOnTop
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                self.applyWindowLevel(to: window)
+            }
+            .store(in: &cancellables)
+
+        runtimeSettings.$useNativeShadow
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                self.applyWindowShadow(to: window)
+            }
+            .store(in: &cancellables)
+
+        runtimeSettings.$transparentBackground
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                self.applyWindowTransparency(to: window)
+            }
+            .store(in: &cancellables)
+
+        runtimeSettings.$hideTitlebar
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                self.applyWindowChrome(to: window)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func currentViewportSize(in window: NSWindow) -> NSSize {
+        if let contentView = window.contentView {
+            return contentView.bounds.size
+        }
+        return window.contentRect(forFrameRect: window.frame).size
+    }
+
+    private func applyWindowLevel(to window: NSWindow) {
+        window.level = runtimeSettings.alwaysOnTop ? .floating : .normal
+    }
+
+    private func applyWindowShadow(to window: NSWindow) {
+        window.hasShadow = runtimeSettings.useNativeShadow
+        window.invalidateShadow()
+    }
+
+    private func applyWindowTransparency(to window: NSWindow) {
+        let transparent = runtimeSettings.transparentBackground
+        window.isOpaque = !transparent
+        window.backgroundColor = transparent ? .clear : .windowBackgroundColor
+    }
+
+    private func applyWindowChrome(to window: NSWindow) {
+        let viewportSize = currentViewportSize(in: window)
+        var styleMask = window.styleMask
+
+        if runtimeSettings.hideTitlebar {
+            styleMask.insert(.fullSizeContentView)
+        } else {
+            styleMask.remove(.fullSizeContentView)
+        }
+
+        window.styleMask = styleMask
+        window.titleVisibility = runtimeSettings.hideTitlebar ? .hidden : .visible
+        window.titlebarAppearsTransparent = runtimeSettings.hideTitlebar
+        window.isMovableByWindowBackground = runtimeSettings.hideTitlebar
+        window.titlebarSeparatorStyle = runtimeSettings.hideTitlebar ? .none : .automatic
+
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = runtimeSettings.hideTitlebar
+        }
+
+        window.setContentSize(viewportSize)
+    }
+
+    private func reloadWidgetController() {
+        guard let window, let config = currentConfig else { return }
+
+        let viewportSize = currentViewportSize(in: window)
+        let widgetController = WidgetPlayerViewController(config: config, runtimeSettings: runtimeSettings)
+        window.contentViewController = widgetController
+        window.setContentSize(viewportSize)
+        applyWindowChrome(to: window)
+        applyWindowTransparency(to: window)
     }
 }
