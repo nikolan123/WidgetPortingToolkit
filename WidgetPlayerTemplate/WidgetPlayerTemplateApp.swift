@@ -70,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var flagsMonitor: Any?
     private let runtimeSettings = TemplateRuntimeSettings.shared
     private var cancellables = Set<AnyCancellable>()
+    private let windowFrameDefaults = UserDefaults.standard
     var currentConfig: WidgetConfig?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -98,6 +99,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let window {
+            saveWindowFrame(for: window)
+        }
         if let monitor = flagsMonitor {
             NSEvent.removeMonitor(monitor)
             flagsMonitor = nil
@@ -131,7 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         applyWindowLevel(to: window)
         applyWindowShadow(to: window)
         applyWindowTransparency(to: window)
-        window.center()
+        restoreWindowFrame(for: window, config: config)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
@@ -140,6 +144,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         self.overlayController = overlayController
 
         installFlagsMonitor()
+    }
+
+    private func windowFrameDefaultsKey(for config: WidgetConfig) -> String {
+        let appIdentifier = Bundle.main.bundleIdentifier ?? "WidgetPlayerTemplate"
+        let widgetIdentifier = config.bundleIdentifier.isEmpty ? "widget" : config.bundleIdentifier
+        return "WidgetWindowFrame::\(appIdentifier)::\(widgetIdentifier)"
+    }
+
+    private func restoreWindowFrame(for window: NSWindow, config: WidgetConfig) {
+        let key = windowFrameDefaultsKey(for: config)
+        if let frameString = windowFrameDefaults.string(forKey: key) {
+            let restoredFrame = NSRectFromString(frameString)
+            if restoredFrame.width > 0, restoredFrame.height > 0 {
+                window.setFrame(restoredFrame, display: false)
+                return
+            }
+        }
+        window.center()
+    }
+
+    private func saveWindowFrame(for window: NSWindow) {
+        guard let config = currentConfig else { return }
+        let key = windowFrameDefaultsKey(for: config)
+        windowFrameDefaults.set(NSStringFromRect(window.frame), forKey: key)
     }
 
     private func installFlagsMonitor() {
@@ -167,6 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         .store(in: &cancellables)
 
         runtimeSettings.$alwaysOnTop
+            .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self, let window = self.window else { return }
@@ -175,6 +204,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
 
         runtimeSettings.$useNativeShadow
+            .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self, let window = self.window else { return }
@@ -183,6 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
 
         runtimeSettings.$transparentBackground
+            .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self, let window = self.window else { return }
@@ -191,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             .store(in: &cancellables)
 
         runtimeSettings.$hideTitlebar
+            .dropFirst()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 guard let self, let window = self.window else { return }
@@ -222,6 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func applyWindowChrome(to window: NSWindow) {
+        let preservedOrigin = window.frame.origin
         let viewportSize = currentViewportSize(in: window)
         var styleMask = window.styleMask
 
@@ -242,21 +275,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
 
         window.setContentSize(viewportSize)
+        preserveWindowOrigin(window, origin: preservedOrigin)
     }
 
     private func reloadWidgetController() {
         guard let window, let config = currentConfig else { return }
 
+        let preservedOrigin = window.frame.origin
         let viewportSize = currentViewportSize(in: window)
         let widgetController = WidgetPlayerViewController(config: config, runtimeSettings: runtimeSettings)
         window.contentViewController = widgetController
         window.setContentSize(viewportSize)
         applyWindowChrome(to: window)
         applyWindowTransparency(to: window)
+        preserveWindowOrigin(window, origin: preservedOrigin)
+    }
+
+    private func preserveWindowOrigin(_ window: NSWindow, origin: NSPoint) {
+        guard window.frame.origin != origin else { return }
+        var frame = window.frame
+        frame.origin = origin
+        window.setFrame(frame, display: false)
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender == window else { return true }
+        saveWindowFrame(for: sender)
         overlayController?.dismissOverlay()
         if let monitor = flagsMonitor {
             NSEvent.removeMonitor(monitor)
@@ -264,5 +308,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         sender.orderOut(nil)
         return false
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let movedWindow = notification.object as? NSWindow, movedWindow == window else { return }
+        saveWindowFrame(for: movedWindow)
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let resizedWindow = notification.object as? NSWindow, resizedWindow == window else { return }
+        saveWindowFrame(for: resizedWindow)
     }
 }
