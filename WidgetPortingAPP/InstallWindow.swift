@@ -17,12 +17,18 @@ struct InstallWindow: View {
     @Binding var windowRef: NSWindow?
     
     @State private var showingTweaks = false
+    @State private var showingExportSheet = false
     @State private var initialTweaks: WidgetTweaks?
+    @State private var selectedExportFormat: WidgetExportFormat = .zip
     @State private var isPortableHovered = false
     @State private var signatureStatus: String = "Checking Signature…"
 
     private var backgroundImage: NSImage? {
         NSImage(named: "ecsb_background_tile")
+    }
+
+    private var exportFormats: [WidgetExportFormat] {
+        WidgetExportFormat.allCases
     }
 
     var body: some View {
@@ -99,21 +105,28 @@ struct InstallWindow: View {
                         initialTweaks = manager.tweaks(for: parsedInfo.bundleIdentifier, id: generatedID)
                     }
                     Spacer()
-                    Button("Portable") {
-                        manager.loadWidget(from: folderURL)
-                        windowRef?.close()
+                    Menu {
+                        Section("Export As") {
+                            ForEach(exportFormats) { format in
+                                Button(format.displayName) {
+                                    exportWidget(as: format)
+                                }
+                            }
+                        }
+                    } label: {
+                        Text("Portable")
+                    }
+                    primaryAction: {
+                        loadPortableWidget()
                     }
                     .onHover { hovering in
                         isPortableHovered = hovering
                     }
                     Button("Install") {
-                        // use the same id when installing!
-                        if let (dest, _) = manager.installWidget(from: folderURL, id: generatedID) {
-                            manager.loadWidget(from: dest, openWindow: manager.autoOpenWidgetOnInstall, plistInfo: parsedInfo, id: generatedID)
-                        }
-                        windowRef?.close()
+                        installWidget()
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
                 .padding(.top, 4)
             }
@@ -133,6 +146,13 @@ struct InstallWindow: View {
                     manager.resetTweaks(for: parsedInfo.bundleIdentifier, id: generatedID)
                 }
             }
+        }
+        .sheet(isPresented: $showingExportSheet) {
+            InstallExportSheet(
+                widgetURL: folderURL,
+                initialFormat: selectedExportFormat
+            )
+            .environmentObject(manager)
         }
         .onAppear {
             updateSignatureStatus()
@@ -160,6 +180,130 @@ struct InstallWindow: View {
             signatureStatus = "Signed"
         } else {
             signatureStatus = "Tampered"
+        }
+    }
+
+    private func installWidget() {
+        // Use the same ID when installing and loading.
+        if let (dest, _) = manager.installWidget(from: folderURL, id: generatedID) {
+            manager.loadWidget(from: dest, openWindow: manager.autoOpenWidgetOnInstall, plistInfo: parsedInfo, id: generatedID)
+        }
+        windowRef?.close()
+    }
+
+    private func loadPortableWidget() {
+        manager.loadWidget(from: folderURL)
+        windowRef?.close()
+    }
+
+    private func exportWidget(as format: WidgetExportFormat) {
+        selectedExportFormat = format
+        showingExportSheet = true
+    }
+}
+
+struct InstallExportSheet: View {
+    @EnvironmentObject private var manager: WidgetManager
+    @Environment(\.dismiss) private var dismiss
+
+    let widgetURL: URL
+    let initialFormat: WidgetExportFormat
+
+    @State private var selectedFormat: WidgetExportFormat
+    @State private var statusText = "Preparing export…"
+    @State private var lastOutputPath: String?
+    @State private var isBusy = false
+    @State private var hasStartedInitialExport = false
+
+    init(widgetURL: URL, initialFormat: WidgetExportFormat) {
+        self.widgetURL = widgetURL
+        self.initialFormat = initialFormat
+        _selectedFormat = State(initialValue: initialFormat)
+    }
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Text("Export Widget")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button("Close") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+
+            Text(widgetURL.lastPathComponent)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Picker("Format", selection: $selectedFormat) {
+                ForEach(WidgetExportFormat.allCases) { format in
+                    Text(format.displayName).tag(format)
+                }
+            }
+            .pickerStyle(.menu)
+            .disabled(isBusy)
+
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Text(statusText)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .lineLimit(3)
+                .frame(maxWidth: .infinity)
+
+            if let lastOutputPath {
+                Text(lastOutputPath)
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity)
+            }
+
+            HStack {
+                Spacer()
+                Button(isBusy ? "Exporting…" : "Export") {
+                    startExport()
+                }
+                .disabled(isBusy)
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 420, height: 220)
+        .preferredColorScheme(.dark)
+        .onAppear {
+            guard !hasStartedInitialExport else { return }
+            hasStartedInitialExport = true
+            startExport()
+        }
+    }
+
+    private func startExport() {
+        isBusy = true
+        statusText = "Starting export…"
+        lastOutputPath = nil
+
+        WidgetExportCoordinator.exportWidget(
+            at: widgetURL,
+            format: selectedFormat,
+            supportDirectoryPath: manager.supportDirectoryPath
+        ) { progress in
+            statusText = progress
+        } completion: { _, statusText, outputPath in
+            isBusy = false
+            self.statusText = statusText
+            lastOutputPath = outputPath
         }
     }
 }

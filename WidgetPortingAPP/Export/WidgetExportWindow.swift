@@ -10,6 +10,83 @@ import AppKit
 import UniformTypeIdentifiers
 
 @MainActor
+enum WidgetExportCoordinator {
+    private enum SaveResult {
+        case saved(URL)
+        case canceled
+        case failed(String)
+    }
+
+    static func exportWidget(
+        at widgetURL: URL,
+        format: WidgetExportFormat,
+        supportDirectoryPath: String,
+        progress: @escaping (String) -> Void,
+        completion: @escaping (_ success: Bool, _ statusText: String, _ outputPath: String?) -> Void
+    ) {
+        progress("Starting export…")
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                let artifact = try WidgetExporter.exportWidgetToHTMLBundle(
+                    widgetURL: widgetURL,
+                    format: format,
+                    supportDirectoryPath: supportDirectoryPath
+                ) { message in
+                    DispatchQueue.main.async {
+                        progress(message)
+                    }
+                }
+
+                DispatchQueue.main.async {
+                    switch presentSavePanel(for: artifact) {
+                    case .saved(let destinationURL):
+                        completion(true, "Export complete.", destinationURL.path)
+                        NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+                    case .canceled:
+                        completion(false, "Export canceled.", nil)
+                    case .failed(let message):
+                        completion(false, message, nil)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    completion(false, error.localizedDescription, nil)
+                }
+            }
+        }
+    }
+
+    private static func presentSavePanel(for artifact: WidgetExportArtifact) -> SaveResult {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = artifact.suggestedFileName
+        panel.allowedContentTypes = [UTType(filenameExtension: artifact.format.outputExtension) ?? .data]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+
+        let response = panel.runModal()
+        defer {
+            try? FileManager.default.removeItem(at: artifact.workDirectory)
+        }
+
+        guard response == .OK, let destinationURL = panel.url else {
+            return .canceled
+        }
+
+        do {
+            let fm = FileManager.default
+            if fm.fileExists(atPath: destinationURL.path) {
+                try fm.removeItem(at: destinationURL)
+            }
+            try fm.copyItem(at: artifact.outputURL, to: destinationURL)
+            return .saved(destinationURL)
+        } catch {
+            return .failed("Failed to save export: \(error.localizedDescription)")
+        }
+    }
+}
+
+@MainActor
 final class WidgetExportViewModel: ObservableObject {
     @Published var statusText: String = "Drop a .wdgt file to create an export package."
     @Published var isBusy: Bool = false
@@ -51,59 +128,16 @@ final class WidgetExportViewModel: ObservableObject {
         let supportPath = manager.supportDirectoryPath
         let selectedFormat = exportFormat
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            do {
-                let artifact = try WidgetExporter.exportWidgetToHTMLBundle(
-                    widgetURL: widgetURL,
-                    format: selectedFormat,
-                    supportDirectoryPath: supportPath
-                ) { progress in
-                    DispatchQueue.main.async {
-                        self.statusText = progress
-                    }
-                }
-
-                DispatchQueue.main.async {
-                    self.presentSavePanel(for: artifact)
-                }
-            } catch {
-                DispatchQueue.main.async {
-                    self.isBusy = false
-                    self.statusText = error.localizedDescription
-                }
-            }
-        }
-    }
-
-    private func presentSavePanel(for artifact: WidgetExportArtifact) {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = artifact.suggestedFileName
-        panel.allowedContentTypes = [UTType(filenameExtension: artifact.format.outputExtension) ?? .data]
-        panel.canCreateDirectories = true
-        panel.isExtensionHidden = false
-
-        let response = panel.runModal()
-        defer {
-            try? FileManager.default.removeItem(at: artifact.workDirectory)
-            isBusy = false
-        }
-
-        guard response == .OK, let destinationURL = panel.url else {
-            statusText = "Export canceled."
-            return
-        }
-
-        do {
-            let fm = FileManager.default
-            if fm.fileExists(atPath: destinationURL.path) {
-                try fm.removeItem(at: destinationURL)
-            }
-            try fm.copyItem(at: artifact.outputURL, to: destinationURL)
-            lastOutputPath = destinationURL.path
-            statusText = "Export complete."
-            NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
-        } catch {
-            statusText = "Failed to save export: \(error.localizedDescription)"
+        WidgetExportCoordinator.exportWidget(
+            at: widgetURL,
+            format: selectedFormat,
+            supportDirectoryPath: supportPath
+        ) { progress in
+            self.statusText = progress
+        } completion: { success, statusText, outputPath in
+            self.isBusy = false
+            self.statusText = statusText
+            self.lastOutputPath = outputPath
         }
     }
 }
