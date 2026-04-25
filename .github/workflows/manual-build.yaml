@@ -39,6 +39,8 @@ jobs:
           mkdir -p "Widget Porting Toolkit.app/Contents/Resources/Templates"
           rm -rf "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
           ditto "WidgetPlayerTemplate.app" "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+          xattr -cr "Widget Porting Toolkit.app"
+          codesign --force --deep --sign - "Widget Porting Toolkit.app"
           zip -r "Widget Porting Toolkit.zip" "Widget Porting Toolkit.app"
 
       - name: Upload ZIP artifact
