@@ -96,6 +96,22 @@ struct AppInfo: Identifiable, Hashable {
 class WidgetManager: ObservableObject {
     static let shared = WidgetManager()
 
+    enum FullScreenBackgroundStyle: String, CaseIterable, Identifiable {
+        case grid = "dbgrid"
+        case lego = "dblego"
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .grid: return "Grid"
+            case .lego: return "Lego"
+            }
+        }
+
+        var assetName: String { rawValue }
+    }
+
     private enum DefaultsKey {
         static let hasCompletedOOBE = "hasCompletedOOBE"
         static let defaultLaunchFullScreen = "defaultLaunchFullScreen"
@@ -106,6 +122,7 @@ class WidgetManager: ObservableObject {
         static let portableMode = "portableMode"
         static let borderlessFullScreenWidgets = "borderlessFullScreenWidgets"
         static let allowMultipleInstances = "allowMultipleInstances"
+        static let fullScreenBackgroundStyle = "fullScreenBackgroundStyle"
     }
 
     private let defaults: UserDefaults
@@ -155,6 +172,11 @@ class WidgetManager: ObservableObject {
             defaults.set(allowMultipleInstances, forKey: DefaultsKey.allowMultipleInstances)
         }
     }
+    @Published var fullScreenBackgroundStyle: FullScreenBackgroundStyle {
+        didSet {
+            defaults.set(fullScreenBackgroundStyle.rawValue, forKey: DefaultsKey.fullScreenBackgroundStyle)
+        }
+    }
     @Published var appInfos: [AppInfo] = []
     @Published var selectedLanguages: [String: String] = [:]
     @Published private(set) var tweaksPerBundle: [String: WidgetTweaks] = [:]
@@ -178,6 +200,9 @@ class WidgetManager: ObservableObject {
         self.portableMode = Self.readBool(defaults, key: DefaultsKey.portableMode, defaultValue: false)
         self.borderlessFullScreenWidgets = Self.readBool(defaults, key: DefaultsKey.borderlessFullScreenWidgets, defaultValue: true)
         self.allowMultipleInstances = Self.readBool(defaults, key: DefaultsKey.allowMultipleInstances, defaultValue: false)
+        self.fullScreenBackgroundStyle = FullScreenBackgroundStyle(
+            rawValue: defaults.string(forKey: DefaultsKey.fullScreenBackgroundStyle) ?? ""
+        ) ?? .grid
 
         // make sure as base exists
         do {
