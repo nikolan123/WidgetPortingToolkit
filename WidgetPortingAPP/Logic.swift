@@ -89,6 +89,8 @@ struct AppInfo: Identifiable, Hashable {
     let height: CGFloat
     let iconURL: URL?
     let languages: [String]
+    let closeBoxInsetX: CGFloat
+    let closeBoxInsetY: CGFloat
 }
 
 // MARK: - ViewModel
@@ -713,7 +715,9 @@ class WidgetManager: ObservableObject {
             width: plistInfo.width,
             height: plistInfo.height,
             iconURL: plistInfo.iconURL.map { processedFolder.appendingPathComponent($0.lastPathComponent) },
-            languages: plistInfo.languages
+            languages: plistInfo.languages,
+            closeBoxInsetX: plistInfo.closeBoxInsetX,
+            closeBoxInsetY: plistInfo.closeBoxInsetY
         )
 
         appInfos.append(newAppInfo)

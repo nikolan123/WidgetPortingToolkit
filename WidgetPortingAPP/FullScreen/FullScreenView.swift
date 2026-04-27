@@ -18,6 +18,7 @@ private struct IconFramePreferenceKey: PreferenceKey {
 struct FullScreenBackgroundView: View {
     @ObservedObject var widgetManager: WidgetManager
     @State private var isOverlayVisible = false
+    @State private var isCloseButtonsVisible = false
     @State private var expandedGroup: [AppInfo]? = nil
     @State private var showingTweaksForApp: AppInfo?
     @State private var languagePopoverApp: AppInfo? = nil
@@ -83,7 +84,10 @@ struct FullScreenBackgroundView: View {
             .zIndex(0)
             
             // Custom window container
-            CustomWindowContainer(widgetManager: widgetManager)
+            CustomWindowContainer(
+                widgetManager: widgetManager,
+                showCloseButtons: isCloseButtonsVisible
+            )
                 .opacity(isOverlayVisible ? 0 : 1)
                 .allowsHitTesting(!isOverlayVisible)
                 .animation(.easeInOut(duration: 0.2), value: isOverlayVisible)
@@ -338,8 +342,11 @@ struct FullScreenBackgroundView: View {
                 HStack {
                     Button {
                         withAnimation(.spring()) {
-                            isOverlayVisible.toggle()
-                            if !isOverlayVisible {
+                            let newOverlayVisibility = !isOverlayVisible
+                            isOverlayVisible = newOverlayVisibility
+                            if newOverlayVisibility {
+                                isCloseButtonsVisible = false
+                            } else {
                                 expandedGroup = nil
                                 expandedAnchor = nil
                             }
@@ -352,13 +359,22 @@ struct FullScreenBackgroundView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    Button(action: {
-                        print("minus")
-                    }) {
+                    Button {
+                        withAnimation(.spring()) {
+                            isCloseButtonsVisible.toggle()
+                            if isCloseButtonsVisible {
+                                isOverlayVisible = false
+                                expandedGroup = nil
+                                expandedAnchor = nil
+                            }
+                        }
+                    } label: {
                         Image("minusbutton")
                             .resizable()
                             .frame(width: 45, height: 45)
+                            .opacity(isCloseButtonsVisible ? 0.6 : 1.0)
                     }
+                    .buttonStyle(.plain)
                     
                     if isOverlayVisible {
                         Link(destination: URL(string: "https://widgets.nikolan.net/getwidgets")!) {
@@ -400,6 +416,8 @@ struct FullScreenBackgroundView: View {
                     expandedAnchor = nil
                 } else if isOverlayVisible {
                     isOverlayVisible = false
+                } else if isCloseButtonsVisible {
+                    isCloseButtonsVisible = false
                 }
             }
         }
@@ -535,7 +553,9 @@ final class PreviewWidgetManager: WidgetManager {
             width: 800,
             height: 600,
             iconURL: nil,
-            languages: ["en"]
+            languages: ["en"],
+            closeBoxInsetX: 15,
+            closeBoxInsetY: 15
         )
     } + [
         AppInfo(
@@ -549,7 +569,9 @@ final class PreviewWidgetManager: WidgetManager {
             width: 1024,
             height: 768,
             iconURL: nil,
-            languages: ["en"]
+            languages: ["en"],
+            closeBoxInsetX: 15,
+            closeBoxInsetY: 15
         )
     ]
     

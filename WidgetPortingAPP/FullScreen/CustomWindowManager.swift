@@ -33,6 +33,7 @@ struct CustomWindowContainer: View {
     @State private var focusedWindowId: UUID?
     @State private var isOptionHeld: Bool = false
     @ObservedObject var widgetManager: WidgetManager
+    let showCloseButtons: Bool
     
     private func bringToFront(_ window: CustomWindow) {
         if focusedWindowId == window.id { return }
@@ -72,6 +73,24 @@ struct CustomWindowContainer: View {
                         bringToFront(window)
                     }
                 )
+            }
+
+            if showCloseButtons {
+                ForEach(openWindows) { window in
+                    DashboardCloseBoxOverlay(
+                        window: window,
+                        widgetManager: widgetManager,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.1)) {
+                                openWindows.removeAll { $0.id == window.id }
+                                if focusedWindowId == window.id {
+                                    focusedWindowId = openWindows.last?.id
+                                }
+                            }
+                        }
+                    )
+                    .zIndex(1000)
+                }
             }
             
             OptionKeyMonitor(isOptionHeld: $isOptionHeld)
@@ -337,6 +356,48 @@ struct CustomWindowView: View {
     }
 }
 
+private struct DashboardCloseBoxOverlay: View {
+    @ObservedObject var window: CustomWindow
+    @ObservedObject var widgetManager: WidgetManager
+    let onClose: () -> Void
+    @State private var isPressed = false
+
+    private let closeBoxSize: CGFloat = 30
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .frame(width: closeBoxSize, height: closeBoxSize)
+
+            Image(isPressed ? "ecsb_closebox_pressed" : "ecsb_closebox")
+                .resizable()
+                .frame(width: closeBoxSize, height: closeBoxSize)
+        }
+            .contentShape(Rectangle())
+            .position(closeButtonCenter)
+            .onLongPressGesture(
+                minimumDuration: 0,
+                maximumDistance: closeBoxSize
+            ) {
+            } onPressingChanged: { pressing in
+                isPressed = pressing
+            }
+            .highPriorityGesture(
+                TapGesture().onEnded {
+                    onClose()
+                }
+            )
+    }
+
+    private var closeButtonCenter: CGPoint {
+        let titleBarOffset = widgetManager.borderlessFullScreenWidgets ? CGFloat(0) : CGFloat(-14)
+        return CGPoint(
+            x: window.position.x + window.appInfo.closeBoxInsetX,
+            y: window.position.y + window.appInfo.closeBoxInsetY + titleBarOffset
+        )
+    }
+}
+
 private extension Notification {
     var appIdentifier: String? {
         userInfo?["appIdentifier"] as? String
@@ -425,7 +486,9 @@ struct OptionKeyMonitor: NSViewRepresentable {
         width: 223,
         height: 225,
         iconURL: URL(fileURLWithPath: "/Users/niko/Documents/code/widgetporting/Widgets_10.5/Stickies.wdgt/Icon.png"),
-        languages: ["English", "German", "French", "I miss the misery"]
+        languages: ["English", "German", "French", "I miss the misery"],
+        closeBoxInsetX: 15,
+        closeBoxInsetY: 15
     )
 
     let tweaks = WidgetTweaks(transparentBackground: true)

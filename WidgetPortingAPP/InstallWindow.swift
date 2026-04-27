@@ -357,7 +357,9 @@ struct DefaultLanguagePopup: View {
         width: 223,
         height: 225,
         iconURL: URL(fileURLWithPath: "/Users/niko/Documents/code/widgetporting/Widgets_10.5/Stickies.wdgt/Icon.png"),
-        languages: ["English", "German", "French", "I miss the misery"]
+        languages: ["English", "German", "French", "I miss the misery"],
+        closeBoxInsetX: 15,
+        closeBoxInsetY: 15
     )
 
     InstallWindow(parsedInfo: exampleApp, folderURL: URL(fileURLWithPath: "/"), windowRef: .constant(nil))
