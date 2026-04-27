@@ -244,12 +244,21 @@ struct WebView: NSViewRepresentable {
 
             case "dashboardDragStart":
                 guard tweaks.emulateDashboardControlRegions,
-                      let window = webView?.window,
-                      !window.styleMask.contains(.fullScreen) else { return }
-                beginNativeDashboardDrag(window: window)
+                      let window = webView?.window else { return }
+                if window.styleMask.contains(.fullScreen) {
+                    postCustomWindowDragNotification(.dashboardCustomWindowDragStart)
+                    callDashboardDragHook("onstartdrag")
+                } else {
+                    beginNativeDashboardDrag(window: window)
+                }
 
             case "dashboardDragEnd":
-                endNativeDashboardDrag(callEndHook: true)
+                if let window = webView?.window, window.styleMask.contains(.fullScreen) {
+                    postCustomWindowDragNotification(.dashboardCustomWindowDragEnd)
+                    callDashboardDragHook("onenddrag")
+                } else {
+                    endNativeDashboardDrag(callEndHook: true)
+                }
 
             // --- Native XHR handlers ---
             case "nativeXHR_send":
@@ -381,6 +390,14 @@ struct WebView: NSViewRepresentable {
                 } catch (e) {}
             })();
             """, completionHandler: nil)
+        }
+
+        private func postCustomWindowDragNotification(_ name: Notification.Name) {
+            NotificationCenter.default.post(
+                name: name,
+                object: nil,
+                userInfo: ["appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id]
+            )
         }
 
         deinit {

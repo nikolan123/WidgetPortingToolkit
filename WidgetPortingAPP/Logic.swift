@@ -18,6 +18,8 @@ class BorderlessKeyWindow: NSWindow {
 extension Notification.Name {
     static let openCustomWindow = Notification.Name("openCustomWindow")
     static let resizeCustomWindow = Notification.Name("resizeCustomWindow")
+    static let dashboardCustomWindowDragStart = Notification.Name("dashboardCustomWindowDragStart")
+    static let dashboardCustomWindowDragEnd = Notification.Name("dashboardCustomWindowDragEnd")
 }
 
 fileprivate var openWindows: [NSWindow] = []

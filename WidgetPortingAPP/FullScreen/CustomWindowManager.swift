@@ -165,6 +165,9 @@ struct CustomWindowView: View {
     @State private var isResizing = false
     @State private var initialSize: CGSize = .zero
     @State private var initialDragPosition: CGPoint = .zero
+    @State private var dashboardDragInitialPosition: CGPoint = .zero
+    @State private var dashboardDragInitialMouseLocation: CGPoint = .zero
+    @State private var dashboardDragMonitor: Any?
     
     var body: some View {
         ZStack {
@@ -281,6 +284,62 @@ struct CustomWindowView: View {
         .onTapGesture {
             onFocus(window)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .dashboardCustomWindowDragStart)) { notification in
+            guard notification.appIdentifier == appIdentifier else { return }
+            beginDashboardContentDrag()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dashboardCustomWindowDragEnd)) { notification in
+            guard notification.appIdentifier == appIdentifier else { return }
+            endDashboardContentDrag()
+        }
+        .onDisappear {
+            endDashboardContentDrag()
+        }
+    }
+
+    private var appIdentifier: String {
+        window.appInfo.bundleIdentifier + "_" + window.appInfo.id
+    }
+
+    private func beginDashboardContentDrag() {
+        dashboardDragInitialPosition = window.position
+        dashboardDragInitialMouseLocation = NSEvent.mouseLocation
+        onFocus(window)
+
+        if dashboardDragMonitor == nil {
+            dashboardDragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { event in
+                handleDashboardContentDragEvent(event)
+                return event
+            }
+        }
+    }
+
+    private func handleDashboardContentDragEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDragged:
+            let mouseLocation = NSEvent.mouseLocation
+            window.position = CGPoint(
+                x: dashboardDragInitialPosition.x + mouseLocation.x - dashboardDragInitialMouseLocation.x,
+                y: dashboardDragInitialPosition.y - (mouseLocation.y - dashboardDragInitialMouseLocation.y)
+            )
+        case .leftMouseUp:
+            endDashboardContentDrag()
+        default:
+            break
+        }
+    }
+
+    private func endDashboardContentDrag() {
+        if let monitor = dashboardDragMonitor {
+            NSEvent.removeMonitor(monitor)
+            dashboardDragMonitor = nil
+        }
+    }
+}
+
+private extension Notification {
+    var appIdentifier: String? {
+        userInfo?["appIdentifier"] as? String
     }
 }
 
