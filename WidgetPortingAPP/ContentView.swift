@@ -359,8 +359,19 @@ struct TweaksSheet: View {
 
             // Runtime section
             VStack(alignment: .leading, spacing: 10) {
-                Text("Runtime")
-                    .font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Runtime")
+                        .font(.headline)
+
+                    Spacer()
+
+                    if !isInstallWindow {
+                        Text("Runtime changes will apply on the next widget launch.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
 
                 Toggle("Recreate Dashboard API", isOn: $working.recreateDashboardAPI)
                     .onChange(of: working.recreateDashboardAPI) { newValue in
@@ -415,15 +426,6 @@ struct TweaksSheet: View {
                 Toggle("Add a blank localizedStrings.js if it doesn't exist", isOn: $working.createBlankLocalizedStrings)
             }
             .disabled(!isInstallWindow)
-
-            Divider()
-            
-            if !isInstallWindow {
-                Text("Runtime changes will apply on the next widget launch.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             // Action buttons
             HStack {
