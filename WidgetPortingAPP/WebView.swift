@@ -71,12 +71,29 @@ struct WebView: NSViewRepresentable {
                     )
                 )
 
+                if tweaks.emulateDashboardControlRegions,
+                   let dragRegions = loadJSFromBundle(named: "DashboardDragRegions") {
+                    let dragRegionsScript = dragRegions.replacingOccurrences(
+                        of: "__DASHBOARD_REGION_CSS__",
+                        with: dashboardRegionCSSJSONString(for: appInfo.tempFolder)
+                    )
+                    controller.addUserScript(
+                        WKUserScript(
+                            source: dragRegionsScript,
+                            injectionTime: .atDocumentEnd,
+                            forMainFrameOnly: true
+                        )
+                    )
+                }
+
                 // Add message handlers
                 controller.add(context.coordinator, name: "openURL")
                 controller.add(context.coordinator, name: "setPreferenceForKey")
                 controller.add(context.coordinator, name: "prepareForTransition")
                 controller.add(context.coordinator, name: "performTransition")
                 controller.add(context.coordinator, name: "resizeTo")
+                controller.add(context.coordinator, name: "dashboardDragStart")
+                controller.add(context.coordinator, name: "dashboardDragEnd")
             }
         }
         
@@ -130,6 +147,9 @@ struct WebView: NSViewRepresentable {
         let namespace: String
         weak var webView: WKWebView?
         private var transitionDirection: String?
+        private var dragInitialWindowOrigin: CGPoint?
+        private var dragInitialMouseLocation: CGPoint?
+        private var dragEventMonitor: Any?
 
         // XHR-native management
         private lazy var xhrProxy: NativeXHRProxy? = {
@@ -222,6 +242,15 @@ struct WebView: NSViewRepresentable {
                     }
                 }
 
+            case "dashboardDragStart":
+                guard tweaks.emulateDashboardControlRegions,
+                      let window = webView?.window,
+                      !window.styleMask.contains(.fullScreen) else { return }
+                beginNativeDashboardDrag(window: window)
+
+            case "dashboardDragEnd":
+                endNativeDashboardDrag(callEndHook: true)
+
             // --- Native XHR handlers ---
             case "nativeXHR_send":
                 guard let dict = message.body as? [String: Any],
@@ -288,6 +317,77 @@ struct WebView: NSViewRepresentable {
             view.layer?.add(animation, forKey: "flip")
             CATransaction.commit()
         }
+
+        private func beginNativeDashboardDrag(window: NSWindow) {
+            dragInitialWindowOrigin = window.frame.origin
+            dragInitialMouseLocation = NSEvent.mouseLocation
+            callDashboardDragHook("onstartdrag")
+
+            if dragEventMonitor == nil {
+                dragEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
+                    self?.handleNativeDashboardDragEvent(event)
+                    return event
+                }
+            }
+        }
+
+        private func handleNativeDashboardDragEvent(_ event: NSEvent) {
+            guard let initialWindowOrigin = dragInitialWindowOrigin,
+                  let initialMouseLocation = dragInitialMouseLocation,
+                  let window = webView?.window,
+                  !window.styleMask.contains(.fullScreen) else {
+                endNativeDashboardDrag(callEndHook: false)
+                return
+            }
+
+            switch event.type {
+            case .leftMouseDragged:
+                let mouseLocation = NSEvent.mouseLocation
+                window.setFrameOrigin(CGPoint(
+                    x: initialWindowOrigin.x + mouseLocation.x - initialMouseLocation.x,
+                    y: initialWindowOrigin.y + mouseLocation.y - initialMouseLocation.y
+                ))
+            case .leftMouseUp:
+                endNativeDashboardDrag(callEndHook: true)
+            default:
+                break
+            }
+        }
+
+        private func endNativeDashboardDrag(callEndHook: Bool) {
+            guard dragInitialWindowOrigin != nil || dragEventMonitor != nil else { return }
+
+            dragInitialWindowOrigin = nil
+            dragInitialMouseLocation = nil
+
+            if let monitor = dragEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                dragEventMonitor = nil
+            }
+
+            if callEndHook {
+                callDashboardDragHook("onenddrag")
+            }
+        }
+
+        private func callDashboardDragHook(_ name: String) {
+            webView?.evaluateJavaScript("""
+            (function() {
+                try {
+                    var widgetHook = window.widget && window.widget.\(name);
+                    var windowHook = window.\(name);
+                    if (typeof widgetHook === 'function') widgetHook();
+                    if (typeof windowHook === 'function' && windowHook !== widgetHook) windowHook();
+                } catch (e) {}
+            })();
+            """, completionHandler: nil)
+        }
+
+        deinit {
+            if let monitor = dragEventMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
     }
     func loadJSFromBundle(named name: String, inFolder folder: String? = nil) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "js", subdirectory: folder),
@@ -297,5 +397,26 @@ struct WebView: NSViewRepresentable {
             return nil
         }
         return js
+    }
+
+    func dashboardRegionCSSJSONString(for folder: URL) -> String {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else { return "[]" }
+
+        var stylesheetSources: [String] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension.caseInsensitiveCompare("css") == .orderedSame {
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+            if let css = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1),
+               css.contains("-apple-dashboard-region") {
+                stylesheetSources.append(css)
+            }
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: stylesheetSources, options: []),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+
+        return json
     }
 }

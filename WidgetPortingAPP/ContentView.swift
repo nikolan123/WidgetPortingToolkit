@@ -385,6 +385,8 @@ struct TweaksSheet: View {
                 .padding(.leading, 20)
 
                 Toggle("Inject helper CSS (disable drag/select)", isOn: $working.injectCSS)
+                Toggle("Emulate Dashboard control regions", isOn: $working.emulateDashboardControlRegions)
+                    .disabled(!working.recreateDashboardAPI)
                 Toggle("Proxy XMLHttpRequest", isOn: $working.xhrProxyEnabled)
                 Toggle("Transparent background", isOn: $working.transparentBackground)
                 Toggle("Use native window shadow", isOn: $working.useNativeShadow)
