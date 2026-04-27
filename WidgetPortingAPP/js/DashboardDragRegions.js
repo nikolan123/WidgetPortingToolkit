@@ -1,3 +1,10 @@
+//
+//  DashboardDragRegions.js
+//  WidgetPortingAPP
+//
+//  Created by Niko on 27.04.26.
+//
+
 (function () {
     if (window.__dashboardDragRegionsInitialized) return;
     window.__dashboardDragRegionsInitialized = true;

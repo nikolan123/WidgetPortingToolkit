@@ -1,3 +1,10 @@
+//
+//  InjectCSS.js
+//  WidgetPortingAPP
+//
+//  Created by Niko on 25.04.26.
+//
+
 (function () {
   var style = document.createElement("style");
   style.type = "text/css";
