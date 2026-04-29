@@ -88,6 +88,7 @@ struct WebView: NSViewRepresentable {
 
                 // Add message handlers
                 controller.add(context.coordinator, name: "openURL")
+                controller.add(context.coordinator, name: "openApplication")
                 controller.add(context.coordinator, name: "setPreferenceForKey")
                 controller.add(context.coordinator, name: "prepareForTransition")
                 controller.add(context.coordinator, name: "performTransition")
@@ -169,6 +170,9 @@ struct WebView: NSViewRepresentable {
                 if let s = message.body as? String, let u = URL(string: s) {
                     NSWorkspace.shared.open(u)
                 }
+            case "openApplication":
+                guard let bundleIdentifier = message.body as? String else { return }
+                openApplication(withBundleIdentifier: bundleIdentifier)
             case "setPreferenceForKey":
                 guard let dict = message.body as? [String: Any],
                       let key = dict["key"] as? String else { return }
@@ -398,6 +402,13 @@ struct WebView: NSViewRepresentable {
                 object: nil,
                 userInfo: ["appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id]
             )
+        }
+
+        private func openApplication(withBundleIdentifier bundleIdentifier: String) {
+            let trimmed = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: trimmed) else { return }
+            NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
         }
 
         deinit {

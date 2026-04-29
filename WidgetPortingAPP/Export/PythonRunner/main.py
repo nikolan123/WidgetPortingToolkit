@@ -128,6 +128,10 @@ class NativeBridge(QObject):
                 return json.dumps({"ok": bool(opened)})
             return json.dumps({"ok": False, "error": "missing URL"})
 
+        if handler == "openApplication":
+            bundle_id = data if isinstance(data, str) else (data or {}).get("bundleId")
+            return self._open_application_by_bundle_id(bundle_id)
+
         if handler == "setPreferenceForKey":
             if not isinstance(data, dict):
                 return json.dumps({"ok": False, "error": "invalid payload"})
@@ -174,6 +178,27 @@ class NativeBridge(QObject):
                 "error": f"'{handler}' is not implemented in this runner yet",
             }
         )
+
+    def _open_application_by_bundle_id(self, bundle_id: object) -> str:
+        if not isinstance(bundle_id, str) or not bundle_id.strip():
+            return json.dumps({"ok": False, "error": "missing bundle identifier"})
+        if sys.platform != "darwin":
+            return json.dumps({"ok": False, "error": "openApplication is only supported on macOS"})
+
+        try:
+            result = subprocess.run(
+                ["open", "-b", bundle_id.strip()],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except Exception as error:
+            return json.dumps({"ok": False, "error": str(error)})
+
+        if result.returncode != 0:
+            error_text = (result.stderr or result.stdout or "").strip()
+            return json.dumps({"ok": False, "error": error_text or "failed to launch application"})
+        return json.dumps({"ok": True})
 
     def _ensure_transition_overlay(self) -> QLabel:
         if self.transition_overlay is None:

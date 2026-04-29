@@ -36,6 +36,7 @@
 
     const handlers = [
       "openURL",
+      "openApplication",
       "setPreferenceForKey",
       "getAllPreferences",
       "prepareForTransition",

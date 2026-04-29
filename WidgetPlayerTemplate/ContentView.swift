@@ -132,7 +132,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         injectDashboardScripts(into: controller)
         injectCSSTweaks(into: controller)
 
-        ["openURL", "setPreferenceForKey", "prepareForTransition", "performTransition", "resizeTo", "systemCommand"]
+        ["openURL", "openApplication", "setPreferenceForKey", "prepareForTransition", "performTransition", "resizeTo", "systemCommand"]
             .forEach { controller.add(self, name: $0) }
 
         let webView = WKWebView(frame: .zero, configuration: webConfig)
@@ -254,6 +254,10 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
             guard let raw = message.body as? String, let url = URL(string: raw) else { return }
             NSWorkspace.shared.open(url)
 
+        case "openApplication":
+            guard let bundleIdentifier = message.body as? String else { return }
+            openApplication(withBundleIdentifier: bundleIdentifier)
+
         case "setPreferenceForKey":
             guard let dict = message.body as? [String: Any], let key = dict["key"] as? String else { return }
             var prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
@@ -331,6 +335,13 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         webView.layer?.add(transition, forKey: "widgetFlip")
         webView.wantsLayer = true
         webView.evaluateJavaScript("if (typeof window.onshow === 'function') { window.onshow(); }", completionHandler: nil)
+    }
+
+    private func openApplication(withBundleIdentifier bundleIdentifier: String) {
+        let trimmed = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: trimmed) else { return }
+        NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
     }
 
     private func runSystemCommand(command: String, token: String) {
