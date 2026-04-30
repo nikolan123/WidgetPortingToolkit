@@ -190,6 +190,8 @@ class WidgetManager: ObservableObject {
     @Published var loadingProgressDenominator: Int = 0     // Total number of widgets to load
     private var loadingWindow: NSWindow? = nil             // Reference to the loading progress window
     var htmlExportWindow: NSWindow? = nil                  // Reference to the HTML export window
+    @Published private(set) var isDashboardFullScreenActive = false
+    private weak var dashboardFullScreenWindow: NSWindow?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -227,6 +229,36 @@ class WidgetManager: ObservableObject {
     private static func readBool(_ defaults: UserDefaults, key: String, defaultValue: Bool) -> Bool {
         guard defaults.object(forKey: key) != nil else { return defaultValue }
         return defaults.bool(forKey: key)
+    }
+
+    func setDashboardFullScreenActive(_ active: Bool, for window: NSWindow?) {
+        if active {
+            dashboardFullScreenWindow = window
+            isDashboardFullScreenActive = true
+            return
+        }
+
+        guard window == nil || dashboardFullScreenWindow == nil || dashboardFullScreenWindow == window else {
+            return
+        }
+
+        dashboardFullScreenWindow = nil
+        isDashboardFullScreenActive = false
+    }
+
+    private func hasActiveDashboardFullScreenWindow() -> Bool {
+        if let window = dashboardFullScreenWindow, window.styleMask.contains(.fullScreen) {
+            return true
+        }
+
+        let activeWindow = NSApp.windows.first { window in
+            (window.title == "Widget Porting Toolkit" || window.contentViewController is NSHostingController<AppRootView>)
+            && window.styleMask.contains(.fullScreen)
+        }
+
+        dashboardFullScreenWindow = activeWindow
+        isDashboardFullScreenActive = activeWindow != nil
+        return activeWindow != nil
     }
     
     @MainActor
@@ -853,14 +885,8 @@ class WidgetManager: ObservableObject {
         let width = tweaks.customWidth ?? appInfo.width
         let height = tweaks.customHeight ?? appInfo.height
         
-        // Check if any ContentView window is in fullscreen
-        let isAnyContentViewInFullscreen = NSApp.windows.contains(where: { window in
-            (window.title == "Widget Porting Toolkit" || window.contentViewController is NSHostingController<AppRootView>) 
-            && window.styleMask.contains(.fullScreen)
-        })
-
-        // If any ContentView is in fullscreen, use custom window system
-        if isAnyContentViewInFullscreen {
+        // If the Dashboard shell is fullscreen, use the custom window system inside that space.
+        if hasActiveDashboardFullScreenWindow() {
             NotificationCenter.default.post(
                 name: .openCustomWindow,
                 object: nil,
