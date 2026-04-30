@@ -115,7 +115,7 @@ enum WidgetExporter {
         }
 
         step("Patching widget file paths…")
-        try patchWidgetFilesForExport(in: exportFolder, mainHTMLPath: parsed.mainHTML)
+        try patchWidgetFilesForExport(in: exportFolder)
 
         step("Preparing runtime JavaScript files…")
         try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
@@ -233,19 +233,10 @@ enum WidgetExporter {
         }
     }
 
-    private static func patchWidgetFilesForExport(in folder: URL, mainHTMLPath: String) throws {
+    private static func patchWidgetFilesForExport(in folder: URL) throws {
         let fm = FileManager.default
         let allowedExtensions = Set(["html", "js", "css"])
         let supportDirectoryURL = folder.appendingPathComponent("SupportDirectory", isDirectory: true)
-        let mainDocumentDirectory = folder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
-        let supportPathForDocument = relativePath(
-            fromDirectory: mainDocumentDirectory,
-            toDirectory: supportDirectoryURL
-        )
-        let rootPathForDocument = relativePath(
-            fromDirectory: mainDocumentDirectory,
-            toDirectory: folder
-        )
         guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else {
             throw WidgetExportError.fileOperationFailed("Failed to enumerate export folder.")
         }
@@ -258,7 +249,15 @@ enum WidgetExporter {
             do {
                 let original = try String(contentsOf: fileURL, encoding: .utf8)
                 var content = original
-                let supportPathForFile = supportPathForDocument
+                let fileDirectory = fileURL.deletingLastPathComponent()
+                let supportPathForFile = relativePath(
+                    fromDirectory: fileDirectory,
+                    toDirectory: supportDirectoryURL
+                )
+                let rootPathForFile = relativePath(
+                    fromDirectory: fileDirectory,
+                    toDirectory: folder
+                )
 
                 content = content.replacingOccurrences(
                     of: "file:///System/Library/WidgetResources",
@@ -274,7 +273,7 @@ enum WidgetExporter {
                 )
                 content = content.replacingOccurrences(
                     of: #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#,
-                    with: "\(rootPathForDocument)$1",
+                    with: "\(rootPathForFile)$1",
                     options: .regularExpression
                 )
 

@@ -537,7 +537,7 @@ class WidgetManager: ObservableObject {
     }
 
     // Preprocess
-    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, mainHTMLPath: String, tweaks: WidgetTweaks) -> URL? {
+    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, tweaks: WidgetTweaks) -> URL? {
         guard !supportDirectoryPath.isEmpty else {
             showError("No Support Directory set. Please select one (Options > Install Support Directory) before loading a widget.")
             return nil
@@ -556,14 +556,9 @@ class WidgetManager: ObservableObject {
         // Determine the support directory source (widgetresources)
         let installedSupportURL = URL(fileURLWithPath: supportDirectoryPath)
 
-        let mainDocumentDirectory = folder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
-        let rootPathForDocument = Self.relativePath(
-            fromDirectory: mainDocumentDirectory,
-            toDirectory: tempFolder
-        )
-
         // copy if requested
-        var supportPathForReplacement = "file://\(installedSupportURL.path)"
+        let absoluteSupportPathForReplacement = "file://\(installedSupportURL.path)"
+        var copiedSupportDirectoryURL: URL?
         if tweaks.copySupportDirectory {
             let tempSupportDir = tempFolder.appendingPathComponent("SupportDirectory")
             do {
@@ -571,10 +566,7 @@ class WidgetManager: ObservableObject {
                     try fm.removeItem(at: tempSupportDir)
                 }
                 try fm.copyItem(at: installedSupportURL, to: tempSupportDir)
-                supportPathForReplacement = Self.relativePath(
-                    fromDirectory: mainDocumentDirectory,
-                    toDirectory: tempSupportDir
-                )
+                copiedSupportDirectoryURL = tempSupportDir
             } catch {
                 showError("Failed to copy Support Directory into \(bundleID): \(error.localizedDescription)")
                 return nil
@@ -601,6 +593,21 @@ class WidgetManager: ObservableObject {
                 var content = original
 
                 if tweaks.replaceFileSchemePaths {
+                    let fileDirectory = fileURL.deletingLastPathComponent()
+                    let supportPathForReplacement: String
+                    if let copiedSupportDirectoryURL {
+                        supportPathForReplacement = Self.relativePath(
+                            fromDirectory: fileDirectory,
+                            toDirectory: copiedSupportDirectoryURL
+                        )
+                    } else {
+                        supportPathForReplacement = absoluteSupportPathForReplacement
+                    }
+                    let rootPathForFile = Self.relativePath(
+                        fromDirectory: fileDirectory,
+                        toDirectory: tempFolder
+                    )
+
                     content = content.replacingOccurrences(
                         of: "file:///System/Library/WidgetResources",
                         with: supportPathForReplacement
@@ -617,7 +624,7 @@ class WidgetManager: ObservableObject {
                     let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
                     content = content.replacingOccurrences(
                         of: pattern,
-                        with: "\(rootPathForDocument)$1",
+                        with: "\(rootPathForFile)$1",
                         options: .regularExpression
                     )
                 }
@@ -692,7 +699,6 @@ class WidgetManager: ObservableObject {
             folderURL,
             bundleID: plistInfo.bundleIdentifier,
             id: id,
-            mainHTMLPath: plistInfo.mainHTML,
             tweaks: tweaks
         ) else {
             return
