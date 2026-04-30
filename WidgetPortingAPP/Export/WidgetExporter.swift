@@ -362,10 +362,12 @@ enum WidgetExporter {
             if ExportPathRules.shouldSkipExportedPath(fileURL, root: folder) { continue }
 
             guard var html = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
-            if html.contains("ExportRuntime.js") { continue }
 
             let prefix = relativePrefix(from: fileURL.deletingLastPathComponent(), toRoot: rootFolder)
-            let scriptTags = scriptFileNames.map { "<script src=\"\(prefix)\($0)\"></script>" }
+            let scriptTags = scriptFileNames
+                .filter { !html.contains($0) }
+                .map { "<script src=\"\(prefix)\($0)\"></script>" }
+            guard !scriptTags.isEmpty else { continue }
 
             let injected = scriptTags.joined(separator: "\n")
 
