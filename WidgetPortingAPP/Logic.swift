@@ -537,7 +537,7 @@ class WidgetManager: ObservableObject {
     }
 
     // Preprocess
-    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, tweaks: WidgetTweaks) -> URL? {
+    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, mainHTMLPath: String, tweaks: WidgetTweaks) -> URL? {
         guard !supportDirectoryPath.isEmpty else {
             showError("No Support Directory set. Please select one (Options > Install Support Directory) before loading a widget.")
             return nil
@@ -555,6 +555,8 @@ class WidgetManager: ObservableObject {
 
         // Determine the support directory source (widgetresources)
         let installedSupportURL = URL(fileURLWithPath: supportDirectoryPath)
+
+        let mainDocumentDirectory = tempFolder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
 
         // copy if requested
         let absoluteSupportPathForReplacement = "file://\(installedSupportURL.path)"
@@ -593,40 +595,49 @@ class WidgetManager: ObservableObject {
                 var content = original
 
                 if tweaks.replaceFileSchemePaths {
-                    let fileDirectory = fileURL.deletingLastPathComponent()
-                    let supportPathForReplacement: String
-                    if let copiedSupportDirectoryURL {
-                        supportPathForReplacement = Self.relativePath(
-                            fromDirectory: fileDirectory,
-                            toDirectory: copiedSupportDirectoryURL
-                        )
+                    if let copiedSupportDirectoryURL,
+                       fileURL.path.hasPrefix(copiedSupportDirectoryURL.path + "/") {
+                        // Copied SupportDirectory internals are patched separately below.
                     } else {
-                        supportPathForReplacement = absoluteSupportPathForReplacement
-                    }
-                    let rootPathForFile = Self.relativePath(
-                        fromDirectory: fileDirectory,
-                        toDirectory: tempFolder
-                    )
+                        let fileDirectory = fileURL.deletingLastPathComponent()
+                        let supportPathForReplacement: String
+                        if let copiedSupportDirectoryURL {
+                            supportPathForReplacement = Self.relativePath(
+                                fromDirectory: fileDirectory,
+                                toDirectory: copiedSupportDirectoryURL
+                            )
+                        } else {
+                            supportPathForReplacement = absoluteSupportPathForReplacement
+                        }
+                        let rootPathForFile = Self.relativePath(
+                            fromDirectory: fileDirectory,
+                            toDirectory: tempFolder
+                        )
 
-                    content = content.replacingOccurrences(
-                        of: "file:///System/Library/WidgetResources",
-                        with: supportPathForReplacement
-                    )
-                    content = content.replacingOccurrences(
-                        of: "/System/Library/WidgetResources",
-                        with: supportPathForReplacement
-                    )
-                    content = content.replacingOccurrences(
-                        of: "\"AppleClasses",
-                        with: "\"\(supportPathForReplacement)/AppleClasses"
-                    )
-                    // replace ~/Library/Widgets/[^ ]+\.wdgt with widget's new path
-                    let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
-                    content = content.replacingOccurrences(
-                        of: pattern,
-                        with: "\(rootPathForFile)$1",
-                        options: .regularExpression
-                    )
+                        content = content.replacingOccurrences(
+                            of: "file:///System/Library/WidgetResources",
+                            with: supportPathForReplacement
+                        )
+                        content = content.replacingOccurrences(
+                            of: "/System/Library/WidgetResources",
+                            with: supportPathForReplacement
+                        )
+                        content = content.replacingOccurrences(
+                            of: "\"AppleClasses",
+                            with: "\"\(supportPathForReplacement)/AppleClasses"
+                        )
+                        content = content.replacingOccurrences(
+                            of: "'AppleClasses",
+                            with: "'\(supportPathForReplacement)/AppleClasses"
+                        )
+                        // replace ~/Library/Widgets/[^ ]+\.wdgt with widget's new path
+                        let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
+                        content = content.replacingOccurrences(
+                            of: pattern,
+                            with: "\(rootPathForFile)$1",
+                            options: .regularExpression
+                        )
+                    }
                 }
 
                 if tweaks.fixSelfClosingScriptTags {
@@ -646,6 +657,19 @@ class WidgetManager: ObservableObject {
                 print("Failed to process file \(fileURL.lastPathComponent): \(error.localizedDescription)")
             }
         }
+
+        if tweaks.copySupportDirectory,
+           tweaks.replaceFileSchemePaths,
+           let copiedSupportDirectoryURL {
+            let supportPathFromMainDocument = Self.relativePath(
+                fromDirectory: mainDocumentDirectory,
+                toDirectory: copiedSupportDirectoryURL
+            )
+            patchCopiedSupportDirectoryAssetPaths(
+                in: copiedSupportDirectoryURL,
+                supportPathFromMainDocument: supportPathFromMainDocument
+            )
+        }
         
         if tweaks.createBlankLocalizedStrings {
             let localizedFile = tempFolder.appendingPathComponent("localizedStrings.js")
@@ -656,6 +680,48 @@ class WidgetManager: ObservableObject {
         }
 
         return tempFolder
+    }
+
+    private func patchCopiedSupportDirectoryAssetPaths(in supportDirectory: URL, supportPathFromMainDocument: String) {
+        let fm = FileManager.default
+        let allowedExtensions = Set(["html", "js", "css"])
+        guard let enumerator = fm.enumerator(at: supportDirectory, includingPropertiesForKeys: nil) else { return }
+
+        for case let fileURL as URL in enumerator where allowedExtensions.contains(fileURL.pathExtension.lowercased()) {
+            guard var content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+
+            let original = content
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            for topLevelDirectory in ["button", "ibutton", "AppleClasses", "AppleParser"] {
+                content = content.replacingOccurrences(
+                    of: "../\(topLevelDirectory)/",
+                    with: "\(supportPathFromMainDocument)/\(topLevelDirectory)/"
+                )
+            }
+            content = content.replacingOccurrences(
+                of: "../resize.png",
+                with: "\(supportPathFromMainDocument)/resize.png"
+            )
+
+            if content != original {
+                try? content.write(to: fileURL, atomically: true, encoding: .utf8)
+            }
+        }
     }
 
     private static func relativePath(fromDirectory source: URL, toDirectory target: URL) -> String {
@@ -699,6 +765,7 @@ class WidgetManager: ObservableObject {
             folderURL,
             bundleID: plistInfo.bundleIdentifier,
             id: id,
+            mainHTMLPath: plistInfo.mainHTML,
             tweaks: tweaks
         ) else {
             return

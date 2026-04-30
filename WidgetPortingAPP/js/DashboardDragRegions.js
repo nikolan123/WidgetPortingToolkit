@@ -45,7 +45,12 @@
         var links = document.querySelectorAll('link[rel~="stylesheet"][href]');
         for (var j = 0; j < links.length; j++) {
             try {
-                fetch(links[j].href)
+                var stylesheetURL = new URL(links[j].href, document.baseURI);
+                if (stylesheetURL.protocol !== "http:" && stylesheetURL.protocol !== "https:") {
+                    continue;
+                }
+
+                fetch(stylesheetURL.href)
                     .then(function (response) {
                         return response.ok ? response.text() : "";
                     })

@@ -115,7 +115,7 @@ enum WidgetExporter {
         }
 
         step("Patching widget file paths…")
-        try patchWidgetFilesForExport(in: exportFolder)
+        try patchWidgetFilesForExport(in: exportFolder, mainHTMLPath: parsed.mainHTML)
 
         step("Preparing runtime JavaScript files…")
         try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
@@ -233,10 +233,11 @@ enum WidgetExporter {
         }
     }
 
-    private static func patchWidgetFilesForExport(in folder: URL) throws {
+    private static func patchWidgetFilesForExport(in folder: URL, mainHTMLPath: String) throws {
         let fm = FileManager.default
         let allowedExtensions = Set(["html", "js", "css"])
         let supportDirectoryURL = folder.appendingPathComponent("SupportDirectory", isDirectory: true)
+        let mainDocumentDirectory = folder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
         guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else {
             throw WidgetExportError.fileOperationFailed("Failed to enumerate export folder.")
         }
@@ -249,33 +250,39 @@ enum WidgetExporter {
             do {
                 let original = try String(contentsOf: fileURL, encoding: .utf8)
                 var content = original
-                let fileDirectory = fileURL.deletingLastPathComponent()
-                let supportPathForFile = relativePath(
-                    fromDirectory: fileDirectory,
-                    toDirectory: supportDirectoryURL
-                )
-                let rootPathForFile = relativePath(
-                    fromDirectory: fileDirectory,
-                    toDirectory: folder
-                )
+                if !fileURL.path.hasPrefix(supportDirectoryURL.path + "/") {
+                    let fileDirectory = fileURL.deletingLastPathComponent()
+                    let supportPathForFile = relativePath(
+                        fromDirectory: fileDirectory,
+                        toDirectory: supportDirectoryURL
+                    )
+                    let rootPathForFile = relativePath(
+                        fromDirectory: fileDirectory,
+                        toDirectory: folder
+                    )
 
-                content = content.replacingOccurrences(
-                    of: "file:///System/Library/WidgetResources",
-                    with: supportPathForFile
-                )
-                content = content.replacingOccurrences(
-                    of: "/System/Library/WidgetResources",
-                    with: supportPathForFile
-                )
-                content = content.replacingOccurrences(
-                    of: "\"AppleClasses",
-                    with: "\"\(supportPathForFile)/AppleClasses"
-                )
-                content = content.replacingOccurrences(
-                    of: #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#,
-                    with: "\(rootPathForFile)$1",
-                    options: .regularExpression
-                )
+                    content = content.replacingOccurrences(
+                        of: "file:///System/Library/WidgetResources",
+                        with: supportPathForFile
+                    )
+                    content = content.replacingOccurrences(
+                        of: "/System/Library/WidgetResources",
+                        with: supportPathForFile
+                    )
+                    content = content.replacingOccurrences(
+                        of: "\"AppleClasses",
+                        with: "\"\(supportPathForFile)/AppleClasses"
+                    )
+                    content = content.replacingOccurrences(
+                        of: "'AppleClasses",
+                        with: "'\(supportPathForFile)/AppleClasses"
+                    )
+                    content = content.replacingOccurrences(
+                        of: #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#,
+                        with: "\(rootPathForFile)$1",
+                        options: .regularExpression
+                    )
+                }
 
                 let scriptPattern = #"<script([^>]*)\/>"#
                 content = content.replacingOccurrences(
@@ -289,6 +296,57 @@ enum WidgetExporter {
                 }
             } catch {
                 throw WidgetExportError.fileOperationFailed("Failed while patching \(fileURL.lastPathComponent): \(error.localizedDescription)")
+            }
+        }
+
+        let supportPathFromMainDocument = relativePath(
+            fromDirectory: mainDocumentDirectory,
+            toDirectory: supportDirectoryURL
+        )
+        patchCopiedSupportDirectoryAssetPaths(
+            in: supportDirectoryURL,
+            supportPathFromMainDocument: supportPathFromMainDocument
+        )
+    }
+
+    private static func patchCopiedSupportDirectoryAssetPaths(in supportDirectory: URL, supportPathFromMainDocument: String) {
+        let fm = FileManager.default
+        let allowedExtensions = Set(["html", "js", "css"])
+        guard let enumerator = fm.enumerator(at: supportDirectory, includingPropertiesForKeys: nil) else { return }
+
+        for case let fileURL as URL in enumerator where allowedExtensions.contains(fileURL.pathExtension.lowercased()) {
+            guard var content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+
+            let original = content
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            for topLevelDirectory in ["button", "ibutton", "AppleClasses", "AppleParser"] {
+                content = content.replacingOccurrences(
+                    of: "../\(topLevelDirectory)/",
+                    with: "\(supportPathFromMainDocument)/\(topLevelDirectory)/"
+                )
+            }
+            content = content.replacingOccurrences(
+                of: "../resize.png",
+                with: "\(supportPathFromMainDocument)/resize.png"
+            )
+
+            if content != original {
+                try? content.write(to: fileURL, atomically: true, encoding: .utf8)
             }
         }
     }
