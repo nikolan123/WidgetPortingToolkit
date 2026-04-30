@@ -252,8 +252,9 @@ enum WidgetExporter {
                 var content = original
                 if !fileURL.path.hasPrefix(supportDirectoryURL.path + "/") {
                     let fileDirectory = fileURL.deletingLastPathComponent()
+                    let supportPathSourceDirectory = fileURL.pathExtension.lowercased() == "js" ? mainDocumentDirectory : fileDirectory
                     let supportPathForFile = relativePath(
-                        fromDirectory: fileDirectory,
+                        fromDirectory: supportPathSourceDirectory,
                         toDirectory: supportDirectoryURL
                     )
                     let rootPathForFile = relativePath(

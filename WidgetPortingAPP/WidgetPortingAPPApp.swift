@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var mainWindow: NSWindow?
     private var openedWidgetDuringLaunch = false
     private var hasPresentedMainWindow = false
+    private var storeShortcutMonitor: Any?
     
     private var hasCompletedOOBE: Bool {
         widgetManager.hasCompletedOOBE
@@ -75,8 +76,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
     
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installStoreShortcutMonitor()
         if !openedWidgetDuringLaunch {
             showMainWindow()
+        }
+    }
+
+    private func installStoreShortcutMonitor() {
+        guard storeShortcutMonitor == nil else { return }
+        storeShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if flags.contains(.command),
+               flags.contains(.shift),
+               flags.contains(.option),
+               event.charactersIgnoringModifiers?.lowercased() == "s" {
+                self?.widgetManager.openWidgetStoreWindow()
+                return nil
+            }
+            return event
         }
     }
     
@@ -151,6 +168,10 @@ struct WidgetPortingAPPApp: App {
                 
                 Button("Set Default Language") {
                     widgetManager.openDefaultLanguageSetting()
+                }
+
+                Button("Set Widget Store API URL…") {
+                    widgetManager.openStoreAPIURLSetting()
                 }
                 
                 Divider()
