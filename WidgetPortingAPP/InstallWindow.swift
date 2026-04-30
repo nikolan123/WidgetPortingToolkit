@@ -347,53 +347,6 @@ struct DefaultLanguagePopup: View {
     }
 }
 
-struct StoreAPIURLPopup: View {
-    @EnvironmentObject var manager: WidgetManager
-    @State private var draftURL = ""
-
-    private var backgroundImage: NSImage? {
-        NSImage(named: "ecsb_background_tile")
-    }
-
-    var body: some View {
-        ZStack {
-            if let img = backgroundImage {
-                Image(nsImage: img)
-                    .resizable(resizingMode: .tile)
-                    .ignoresSafeArea()
-            } else {
-                Color.gray.opacity(0.15).ignoresSafeArea()
-            }
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Widget Store API URL").font(.headline)
-                TextField("http://192.168.1.13:8000", text: $draftURL)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                HStack {
-                    Button("Reset") {
-                        draftURL = "http://192.168.1.13:8000"
-                        manager.widgetStoreAPIBaseURL = draftURL
-                    }
-                    Spacer()
-                    Button("Save") {
-                        let trimmed = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
-                        manager.widgetStoreAPIBaseURL = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .padding()
-        }
-        .frame(width: 420, height: 120)
-        .preferredColorScheme(.dark)
-        .onAppear {
-            draftURL = manager.widgetStoreAPIBaseURL
-        }
-    }
-}
-
 // Preview
 #Preview {
     let exampleApp = ParsedInfo(
