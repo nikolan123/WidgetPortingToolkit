@@ -205,6 +205,7 @@ final class TemplateOverlayController {
     func parentWindowWillClose() {
         guard !parentIsClosing else { return }
         parentIsClosing = true
+        isCleaningUp = true
 
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)

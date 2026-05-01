@@ -11,9 +11,16 @@ import WebKit
 struct WebView: NSViewRepresentable {
     let appInfo: AppInfo
     let tweaks: WidgetTweaks
+    let windowInstanceID: UUID?
+
+    init(appInfo: AppInfo, tweaks: WidgetTweaks, windowInstanceID: UUID? = nil) {
+        self.appInfo = appInfo
+        self.tweaks = tweaks
+        self.windowInstanceID = windowInstanceID
+    }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(appInfo: appInfo, tweaks: tweaks)
+        Coordinator(appInfo: appInfo, tweaks: tweaks, windowInstanceID: windowInstanceID)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -145,6 +152,7 @@ struct WebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let appInfo: AppInfo
         let tweaks: WidgetTweaks
+        let windowInstanceID: UUID?
         let namespace: String
         weak var webView: WKWebView?
         private var transitionDirection: String?
@@ -157,9 +165,10 @@ struct WebView: NSViewRepresentable {
             return tweaks.xhrProxyEnabled ? NativeXHRProxy(owner: self) : nil
         }()
 
-        init(appInfo: AppInfo, tweaks: WidgetTweaks) {
+        init(appInfo: AppInfo, tweaks: WidgetTweaks, windowInstanceID: UUID?) {
             self.appInfo = appInfo
             self.tweaks = tweaks
+            self.windowInstanceID = windowInstanceID
             self.namespace = "WidgetPrefs::" + appInfo.bundleIdentifier + "_" + appInfo.id
             print("Prefs namespace: \(self.namespace)")
         }
@@ -237,11 +246,11 @@ struct WebView: NSViewRepresentable {
                         NotificationCenter.default.post(
                             name: .resizeCustomWindow,
                             object: nil,
-                            userInfo: [
+                            userInfo: customWindowUserInfo([
                                 "appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id,
                                 "width": w,
                                 "height": h
-                            ]
+                            ])
                         )
                     }
                 }
@@ -400,8 +409,18 @@ struct WebView: NSViewRepresentable {
             NotificationCenter.default.post(
                 name: name,
                 object: nil,
-                userInfo: ["appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id]
+                userInfo: customWindowUserInfo([
+                    "appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id
+                ])
             )
+        }
+
+        private func customWindowUserInfo(_ base: [String: Any]) -> [String: Any] {
+            var userInfo = base
+            if let windowInstanceID {
+                userInfo["windowInstanceID"] = windowInstanceID.uuidString
+            }
+            return userInfo
         }
 
         private func openApplication(withBundleIdentifier bundleIdentifier: String) {

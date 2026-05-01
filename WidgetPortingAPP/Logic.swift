@@ -23,23 +23,31 @@ extension Notification.Name {
 }
 
 fileprivate var openWindows: [NSWindow] = []
-fileprivate var overlayControllers: [String: WidgetOverlayController] = [:]
+fileprivate var overlayControllers: [ObjectIdentifier: WidgetOverlayController] = [:]
+fileprivate var windowCloseObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 fileprivate var globalFlagsMonitor: Any?
 fileprivate var globalKeyMonitor: Any?
+
+fileprivate func widgetWindow(for eventWindow: NSWindow?) -> NSWindow? {
+    guard let eventWindow else { return nil }
+    if openWindows.contains(where: { $0 === eventWindow }) {
+        return eventWindow
+    }
+    return openWindows.first { window in
+        window.childWindows?.contains(where: { $0 === eventWindow }) == true
+    }
+}
 
 // Centralized Option key monitor
 fileprivate func setupGlobalOverlayMonitor() {
     if globalFlagsMonitor == nil {
         globalFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let optionHeld = event.modifierFlags.contains(.option)
-            
-            // Find key window and toggle its overlay
-            if let keyWindow = NSApp.keyWindow,
-               let windowId = keyWindow.identifier?.rawValue,
-               let controller = overlayControllers[windowId] {
+
+            for controller in overlayControllers.values {
                 controller.handleOptionKey(held: optionHeld)
             }
-            
+
             return event
         }
     }
@@ -49,11 +57,8 @@ fileprivate func setupGlobalOverlayMonitor() {
         globalKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Check for Cmd+W (keyCode 13 = W)
             if event.modifierFlags.contains(.command) && event.keyCode == 13 {
-                if let keyWindow = NSApp.keyWindow,
-                   let windowId = keyWindow.identifier?.rawValue,
-                   overlayControllers[windowId] != nil {
-                    // This is one of our widget windows
-                    keyWindow.close()
+                if let window = widgetWindow(for: NSApp.keyWindow) {
+                    window.close()
                     return nil // Consume the event
                 }
             }
@@ -920,6 +925,7 @@ class WidgetManager: ObservableObject {
         }
 
         window.title = appInfo.displayName
+        window.isReleasedWhenClosed = false
         window.contentViewController = hosting
         window.hasShadow = tweaks.useNativeShadow
 
@@ -948,22 +954,31 @@ class WidgetManager: ObservableObject {
         openWindows.append(window)
         
         // Setup overlay controller for Option key
+        let windowKey = ObjectIdentifier(window)
         let overlayController = WidgetOverlayController(parentWindow: window, appInfo: appInfo, widgetManager: self)
-        overlayControllers[windowIdentifier] = overlayController
+        overlayControllers[windowKey] = overlayController
         
         // Setup global monitor on first window
         setupGlobalOverlayMonitor()
         
-        NotificationCenter.default.addObserver(
+        windowCloseObservers[windowKey] = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
             queue: .main
-        ) { [weak self] _ in
-            overlayControllers[windowIdentifier]?.cleanup()
-            overlayControllers.removeValue(forKey: windowIdentifier)
-            openWindows.removeAll { $0 == window }
-            cleanupGlobalOverlayMonitorIfNeeded()
-            NotificationCenter.default.removeObserver(self as Any, name: NSWindow.willCloseNotification, object: window)
+        ) { notification in
+            guard let closingWindow = notification.object as? NSWindow else { return }
+            overlayControllers[windowKey]?.parentWindowWillClose()
+
+            DispatchQueue.main.async {
+                overlayControllers.removeValue(forKey: windowKey)
+                openWindows.removeAll { $0 === closingWindow }
+
+                if let observer = windowCloseObservers.removeValue(forKey: windowKey) {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+
+                cleanupGlobalOverlayMonitorIfNeeded()
+            }
         }
     }
 

@@ -38,7 +38,9 @@ class WidgetOverlayState: ObservableObject {
 struct WidgetOverlayView: View {
     let appInfo: AppInfo
     @ObservedObject var state: WidgetOverlayState
-    
+    @State private var dragStartOrigin: CGPoint = .zero
+    @State private var dragStartMouseLocation: CGPoint = .zero
+
     var body: some View {
         if let widgetManager = state.widgetManager {
             SharedWidgetOverlay(
@@ -49,13 +51,20 @@ struct WidgetOverlayView: View {
                 currentSize: state.currentSize,
                 showInfoPopover: $state.showInfoPopover,
                 showResizePopover: $state.showResizePopover,
-                onDragStart: { },
-                onDrag: { delta in
+                onDragStart: {
                     guard let window = state.parentWindow else { return }
-                    var origin = window.frame.origin
-                    origin.x += delta.width
-                    origin.y -= delta.height
-                    window.setFrameOrigin(origin)
+                    dragStartOrigin = window.frame.origin
+                    dragStartMouseLocation = NSEvent.mouseLocation
+                },
+                onDrag: { _ in
+                    guard let window = state.parentWindow else { return }
+
+                    let currentMouseLocation = NSEvent.mouseLocation
+
+                    window.setFrameOrigin(CGPoint(
+                        x: dragStartOrigin.x + currentMouseLocation.x - dragStartMouseLocation.x,
+                        y: dragStartOrigin.y + currentMouseLocation.y - dragStartMouseLocation.y
+                    ))
                 },
                 onDragEnd: { },
                 onClose: { state.closeWindow() },
@@ -90,6 +99,8 @@ class WidgetOverlayController {
     private var cancellables = Set<AnyCancellable>()
     private let appInfo: AppInfo
     private let state = WidgetOverlayState()
+    private var isCleaningUp = false
+    private var parentIsClosing = false
     
     private var isResizing = false
     private var initialMouseLocation: NSPoint = .zero
@@ -140,6 +151,7 @@ class WidgetOverlayController {
         overlay.isOpaque = false
         overlay.backgroundColor = .clear
         overlay.ignoresMouseEvents = false
+        overlay.isReleasedWhenClosed = false
         overlay.level = parent.level + 1
         overlay.alphaValue = 0
         
@@ -191,9 +203,7 @@ class WidgetOverlayController {
                 isResizing = false
                 state.isResizing = false
                 let finalSize = parent.contentLayoutRect.size
-                Task { @MainActor in
-                    state.widgetManager?.resizeWindow(for: appInfo, width: finalSize.width, height: finalSize.height)
-                }
+                saveCurrentSize(finalSize)
             }
         default: break
         }
@@ -201,14 +211,16 @@ class WidgetOverlayController {
     
     private func hideOverlay() {
         guard let overlay = overlayWindow else { return }
+        guard !isCleaningUp && !parentIsClosing else {
+            removeOverlayWindow(overlay)
+            return
+        }
         
         if isResizing, let parent = parentWindow {
             isResizing = false
             state.isResizing = false
             let finalSize = parent.contentLayoutRect.size
-            Task { @MainActor in
-                state.widgetManager?.resizeWindow(for: appInfo, width: finalSize.width, height: finalSize.height)
-            }
+            saveCurrentSize(finalSize)
         }
         
         if let monitor = mouseMonitor {
@@ -221,10 +233,19 @@ class WidgetOverlayController {
             overlay.animator().alphaValue = 0
         }, completionHandler: { [weak self] in
             guard let self = self, let overlay = self.overlayWindow else { return }
-            self.parentWindow?.removeChildWindow(overlay)
-            overlay.orderOut(nil)
-            self.overlayWindow = nil
+            self.removeOverlayWindow(overlay)
         })
+    }
+
+    private func removeOverlayWindow(_ overlay: NSWindow) {
+        if !parentIsClosing {
+            parentWindow?.removeChildWindow(overlay)
+        }
+        overlay.orderOut(nil)
+        overlay.contentViewController = nil
+        if overlayWindow === overlay {
+            overlayWindow = nil
+        }
     }
     
     private func updateOverlayFrame() {
@@ -233,14 +254,60 @@ class WidgetOverlayController {
     }
     
     func cleanup() {
-        hideOverlay()
+        guard !isCleaningUp else { return }
+        isCleaningUp = true
+
+        dismissOverlay()
         if let observer = windowObserver {
             NotificationCenter.default.removeObserver(observer)
             windowObserver = nil
         }
+    }
+
+    private func dismissOverlay() {
+        if isResizing, let parent = parentWindow {
+            isResizing = false
+            state.isResizing = false
+            let finalSize = parent.contentLayoutRect.size
+            saveCurrentSize(finalSize)
+        }
         if let monitor = mouseMonitor {
             NSEvent.removeMonitor(monitor)
             mouseMonitor = nil
+        }
+        if let overlay = overlayWindow {
+            removeOverlayWindow(overlay)
+        }
+    }
+
+    func parentWindowWillClose() {
+        guard !parentIsClosing else { return }
+        parentIsClosing = true
+
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseMonitor = nil
+        }
+        if let observer = windowObserver {
+            NotificationCenter.default.removeObserver(observer)
+            windowObserver = nil
+        }
+        if let overlay = overlayWindow {
+            overlay.orderOut(nil)
+            overlay.contentViewController = nil
+            overlayWindow = nil
+        }
+        parentWindow = nil
+        state.parentWindow = nil
+    }
+
+    private func saveCurrentSize(_ size: CGSize) {
+        Task { @MainActor in
+            guard let widgetManager = state.widgetManager else { return }
+            var tweaks = widgetManager.tweaks(for: appInfo.bundleIdentifier, id: appInfo.id)
+            tweaks.customWidth = size.width
+            tweaks.customHeight = size.height
+            widgetManager.updateTweaks(for: appInfo.bundleIdentifier, id: appInfo.id, to: tweaks)
         }
     }
     
