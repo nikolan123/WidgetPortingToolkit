@@ -106,7 +106,11 @@ struct WebView: NSViewRepresentable {
         }
         
         if tweaks.recreateDashboardAPI && tweaks.allowSystemCommands {
-            if let systemInjectScript = loadJSFromBundle(named: "SystemInject") {
+            if let rawSystemInjectScript = loadJSFromBundle(named: "SystemInject") {
+                let systemInjectScript = rawSystemInjectScript.replacingOccurrences(
+                    of: "__WIDGET_SYSTEM_SCHEME_ENABLED__",
+                    with: "true"
+                )
                 controller.addUserScript(
                     WKUserScript(
                         source: systemInjectScript,
@@ -118,6 +122,9 @@ struct WebView: NSViewRepresentable {
                 controller.add(context.coordinator, name: "systemCommand")
             }
 
+            // Register URL scheme handler for synchronous widget.system() calls
+            let schemeHandler = SystemSchemeHandler(appInfo: appInfo, noAsk: tweaks.noAskSystemCommands)
+            configuration.setURLSchemeHandler(schemeHandler, forURLScheme: "widget-system")
         }
 
         // css injection
@@ -215,6 +222,11 @@ struct WebView: NSViewRepresentable {
                     SystemRunner.runStreaming(command: command, token: token, webView: message.webView!, appInfo: appInfo, noAsk: tweaks.noAskSystemCommands)
                 } else if action == "cancel" {
                     SystemRunner.cancel(token: token)
+                } else if action == "write" {
+                    guard let string = dict["string"] as? String else { return }
+                    SystemRunner.write(token: token, string: string)
+                } else if action == "close" {
+                    SystemRunner.closeStdin(token: token)
                 }
                 
             case "resizeTo":
