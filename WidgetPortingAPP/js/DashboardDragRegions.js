@@ -193,6 +193,17 @@
         return false;
     }
 
+    function isInteractiveTarget(target) {
+        if (!target || target.nodeType !== 1) return false;
+
+        var interactive = target.closest(
+            'input, textarea, select, option, button, summary, [contenteditable=""], [contenteditable="true"], [role="slider"]'
+        );
+
+        if (!interactive) return false;
+        return true;
+    }
+
     function postDragMessage(name, payload) {
         try {
             window.webkit.messageHandlers[name].postMessage(payload || {});
@@ -201,6 +212,7 @@
 
     document.addEventListener("mousedown", function (event) {
         if (event.button !== 0) return;
+        if (isInteractiveTarget(event.target)) return;
         if (isInControlRegion(event.clientX, event.clientY)) return;
 
         pendingDrag = {
