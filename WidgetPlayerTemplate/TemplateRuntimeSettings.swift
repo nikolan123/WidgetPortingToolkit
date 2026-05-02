@@ -11,7 +11,6 @@ import Combine
 final class TemplateRuntimeSettings: ObservableObject {
     static let shared = TemplateRuntimeSettings()
 
-    @Published var recreateDashboardAPI: Bool = true { didSet { saveIfReady() } }
     @Published var emulateDashboardControlRegions: Bool = true { didSet { saveIfReady() } }
     @Published var allowSystemCommands: Bool = true { didSet { saveIfReady() } }
     @Published var noAskSystemCommands: Bool = false { didSet { saveIfReady() } }
@@ -26,7 +25,6 @@ final class TemplateRuntimeSettings: ObservableObject {
     private var isReady = false
 
     private struct PersistedSettings: Codable {
-        var recreateDashboardAPI: Bool
         var emulateDashboardControlRegions: Bool
         var allowSystemCommands: Bool
         var noAskSystemCommands: Bool
@@ -37,7 +35,6 @@ final class TemplateRuntimeSettings: ObservableObject {
         var hideTitlebar: Bool
 
         init(
-            recreateDashboardAPI: Bool,
             emulateDashboardControlRegions: Bool,
             allowSystemCommands: Bool,
             noAskSystemCommands: Bool,
@@ -47,7 +44,6 @@ final class TemplateRuntimeSettings: ObservableObject {
             alwaysOnTop: Bool,
             hideTitlebar: Bool
         ) {
-            self.recreateDashboardAPI = recreateDashboardAPI
             self.emulateDashboardControlRegions = emulateDashboardControlRegions
             self.allowSystemCommands = allowSystemCommands
             self.noAskSystemCommands = noAskSystemCommands
@@ -60,7 +56,6 @@ final class TemplateRuntimeSettings: ObservableObject {
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            recreateDashboardAPI = try container.decodeIfPresent(Bool.self, forKey: .recreateDashboardAPI) ?? true
             emulateDashboardControlRegions = try container.decodeIfPresent(Bool.self, forKey: .emulateDashboardControlRegions) ?? true
             allowSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .allowSystemCommands) ?? true
             noAskSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .noAskSystemCommands) ?? false
@@ -76,7 +71,6 @@ final class TemplateRuntimeSettings: ObservableObject {
         self.fileManager = fileManager
 
         let loaded = loadPersistedSettings() ?? migrateLegacySettings() ?? PersistedSettings(
-            recreateDashboardAPI: true,
             emulateDashboardControlRegions: true,
             allowSystemCommands: true,
             noAskSystemCommands: false,
@@ -87,7 +81,6 @@ final class TemplateRuntimeSettings: ObservableObject {
             hideTitlebar: false
         )
 
-        recreateDashboardAPI = loaded.recreateDashboardAPI
         emulateDashboardControlRegions = loaded.emulateDashboardControlRegions
         allowSystemCommands = loaded.allowSystemCommands
         noAskSystemCommands = loaded.noAskSystemCommands
@@ -129,7 +122,6 @@ final class TemplateRuntimeSettings: ObservableObject {
         }
 
         let migrated = PersistedSettings(
-            recreateDashboardAPI: bool("recreateDashboardAPI", default: true),
             emulateDashboardControlRegions: bool("emulateDashboardControlRegions", default: true),
             allowSystemCommands: bool("allowSystemCommands", default: true),
             noAskSystemCommands: bool("noAskSystemCommands", default: false),
@@ -151,7 +143,6 @@ final class TemplateRuntimeSettings: ObservableObject {
 
     private func save() {
         let settings = PersistedSettings(
-            recreateDashboardAPI: recreateDashboardAPI,
             emulateDashboardControlRegions: emulateDashboardControlRegions,
             allowSystemCommands: allowSystemCommands,
             noAskSystemCommands: noAskSystemCommands,

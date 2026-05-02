@@ -175,40 +175,27 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     }
 
     private func injectDashboardScripts(into controller: WKUserContentController) {
+        let prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
+        let prefsData = (try? JSONSerialization.data(withJSONObject: prefs, options: [])) ?? Data()
+        let prefsJSON = String(data: prefsData, encoding: .utf8) ?? "{}"
+        let widgetIdentifier = appBundleIdentifier
+        let regionsEnabled = runtimeSettings.emulateDashboardControlRegions ? "true" : "false"
+
+        // Exporter already hardcodes DashboardAPI.js, WidgetShims.js, and SystemInject.js into the HTML.
+        // We only need to inject the dynamic configuration variables before those scripts run.
+        let configScript = """
+        window.__widgetPortingDashboardControlRegionsEnabled = \(regionsEnabled);
+        window.__widgetPrefs = \(prefsJSON);
+        window.__widgetIdentifier = "\(widgetIdentifier)";
+        """
+        
         controller.addUserScript(
             WKUserScript(
-                source: "window.__widgetPortingDashboardControlRegionsEnabled = \(runtimeSettings.emulateDashboardControlRegions ? "true" : "false");",
+                source: configScript,
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: true
             )
         )
-
-        guard runtimeSettings.recreateDashboardAPI else { return }
-
-        let prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
-        let prefsData = (try? JSONSerialization.data(withJSONObject: prefs, options: [])) ?? Data()
-        let prefsJSON = String(data: prefsData, encoding: .utf8) ?? "{}"
-        let widgetIdentifier = appBundleIdentifier + "_template"
-
-        if let dashboard = loadBundledJS(named: "DashboardAPI"),
-           let widgetShims = loadBundledJS(named: "WidgetShims") {
-            let dashboardPatched = dashboard
-                .replacingOccurrences(of: "__WIDGET_PREFS__", with: prefsJSON)
-                .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: widgetIdentifier)
-
-            controller.addUserScript(
-                WKUserScript(source: dashboardPatched, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-            )
-            controller.addUserScript(
-                WKUserScript(source: widgetShims, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-            )
-        }
-
-        if runtimeSettings.allowSystemCommands, let systemInject = loadBundledJS(named: "SystemInject") {
-            controller.addUserScript(
-                WKUserScript(source: systemInject, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-            )
-        }
     }
 
     private func injectCSSTweaks(into controller: WKUserContentController) {
@@ -222,6 +209,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         }
 
         // Fallback if InjectCSS.js is not in this target's resources.
+        // TODO: check if ts is needed
         let fallback = """
         (function(){
           var s = document.createElement('style');

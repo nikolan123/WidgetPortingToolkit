@@ -30,7 +30,6 @@ struct WidgetPlayerTemplateApp: App {
             }
 
             CommandMenu("Options") {
-                Toggle("Recreate Dashboard API", isOn: binding(\.recreateDashboardAPI))
                 Toggle("Emulate Dashboard control regions", isOn: binding(\.emulateDashboardControlRegions))
                 Toggle("Allow system command execution", isOn: binding(\.allowSystemCommands))
                 Toggle("Don't ask when running system commands", isOn: binding(\.noAskSystemCommands))
@@ -183,8 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func bindRuntimeSettings() {
-        Publishers.Merge3(
-            runtimeSettings.$recreateDashboardAPI.map { _ in () },
+        Publishers.Merge(
             runtimeSettings.$emulateDashboardControlRegions.map { _ in () },
             Publishers.Merge(
                 runtimeSettings.$allowSystemCommands.map { _ in () },

@@ -9,11 +9,11 @@
     if (window.__widgetBridgeInitialized) return;
     window.__widgetBridgeInitialized = true;
 
-    window.__widgetPrefs = __WIDGET_PREFS__;
+    window.__widgetPrefs = window.__widgetPrefs || __WIDGET_PREFS__;
 
     window.widget = window.widget || {};
     
-    window.widget.identifier = "__WIDGET_IDENTIFIER__";
+    window.widget.identifier = window.__widgetIdentifier || "__WIDGET_IDENTIFIER__";
     
     /* preferences */
 
