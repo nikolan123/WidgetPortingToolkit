@@ -8,112 +8,24 @@
 import Foundation
 import Combine
 
+@MainActor
 final class TemplateRuntimeSettings: ObservableObject {
     static let shared = TemplateRuntimeSettings()
 
-    @Published var emulateDashboardControlRegions: Bool = true { didSet { saveIfReady() } }
-    @Published var allowSystemCommands: Bool = true { didSet { saveIfReady() } }
-    @Published var noAskSystemCommands: Bool = false { didSet { saveIfReady() } }
-    @Published var injectCSS: Bool = true { didSet { saveIfReady() } }
-    @Published var transparentBackground: Bool = true { didSet { saveIfReady() } }
-    @Published var useNativeShadow: Bool = TemplateRuntimeSettings.defaultUseNativeShadow() { didSet { saveIfReady() } }
-    @Published var alwaysOnTop: Bool = false { didSet { saveIfReady() } }
-    @Published var hideTitlebar: Bool = false { didSet { saveIfReady() } }
+    @Published var emulateDashboardControlRegions: Bool { didSet { save() } }
+    @Published var allowSystemCommands: Bool { didSet { save() } }
+    @Published var noAskSystemCommands: Bool { didSet { save() } }
+    @Published var injectCSS: Bool { didSet { save() } }
+    @Published var transparentBackground: Bool { didSet { save() } }
+    @Published var useNativeShadow: Bool { didSet { save() } }
+    @Published var alwaysOnTop: Bool { didSet { save() } }
+    @Published var hideTitlebar: Bool { didSet { save() } }
 
-    private let fileManager: FileManager
-    private let legacyDefaultsKey = "WidgetPlayerTemplate.RuntimeSettings"
+    private static let defaultsKey = "WidgetPlayerTemplate.RuntimeSettings"
     private var isReady = false
 
-    private struct PersistedSettings: Codable {
-        var emulateDashboardControlRegions: Bool
-        var allowSystemCommands: Bool
-        var noAskSystemCommands: Bool
-        var injectCSS: Bool
-        var transparentBackground: Bool
-        var useNativeShadow: Bool
-        var alwaysOnTop: Bool
-        var hideTitlebar: Bool
-
-        init(
-            emulateDashboardControlRegions: Bool,
-            allowSystemCommands: Bool,
-            noAskSystemCommands: Bool,
-            injectCSS: Bool,
-            transparentBackground: Bool,
-            useNativeShadow: Bool,
-            alwaysOnTop: Bool,
-            hideTitlebar: Bool
-        ) {
-            self.emulateDashboardControlRegions = emulateDashboardControlRegions
-            self.allowSystemCommands = allowSystemCommands
-            self.noAskSystemCommands = noAskSystemCommands
-            self.injectCSS = injectCSS
-            self.transparentBackground = transparentBackground
-            self.useNativeShadow = useNativeShadow
-            self.alwaysOnTop = alwaysOnTop
-            self.hideTitlebar = hideTitlebar
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            emulateDashboardControlRegions = try container.decodeIfPresent(Bool.self, forKey: .emulateDashboardControlRegions) ?? true
-            allowSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .allowSystemCommands) ?? true
-            noAskSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .noAskSystemCommands) ?? false
-            injectCSS = try container.decodeIfPresent(Bool.self, forKey: .injectCSS) ?? true
-            transparentBackground = try container.decodeIfPresent(Bool.self, forKey: .transparentBackground) ?? true
-            useNativeShadow = try container.decodeIfPresent(Bool.self, forKey: .useNativeShadow) ?? TemplateRuntimeSettings.defaultUseNativeShadow()
-            alwaysOnTop = try container.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? false
-            hideTitlebar = try container.decodeIfPresent(Bool.self, forKey: .hideTitlebar) ?? false
-        }
-    }
-
-    private init(fileManager: FileManager = .default) {
-        self.fileManager = fileManager
-
-        let loaded = loadPersistedSettings() ?? migrateLegacySettings() ?? PersistedSettings(
-            emulateDashboardControlRegions: true,
-            allowSystemCommands: true,
-            noAskSystemCommands: false,
-            injectCSS: true,
-            transparentBackground: true,
-            useNativeShadow: Self.defaultUseNativeShadow(),
-            alwaysOnTop: false,
-            hideTitlebar: false
-        )
-
-        emulateDashboardControlRegions = loaded.emulateDashboardControlRegions
-        allowSystemCommands = loaded.allowSystemCommands
-        noAskSystemCommands = loaded.noAskSystemCommands
-        injectCSS = loaded.injectCSS
-        transparentBackground = loaded.transparentBackground
-        useNativeShadow = loaded.useNativeShadow
-        alwaysOnTop = loaded.alwaysOnTop
-        hideTitlebar = loaded.hideTitlebar
-
-        isReady = true
-        save()
-    }
-
-    private static func defaultUseNativeShadow() -> Bool {
-        ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
-    }
-
-    private var storageURL: URL {
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.niko.WidgetPlayerTemplate"
-        let baseURL = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        return baseURL
-            .appendingPathComponent(bundleID, isDirectory: true)
-            .appendingPathComponent("RuntimeSettings.json", isDirectory: false)
-    }
-
-    private func loadPersistedSettings() -> PersistedSettings? {
-        guard let data = try? Data(contentsOf: storageURL) else { return nil }
-        return try? JSONDecoder().decode(PersistedSettings.self, from: data)
-    }
-
-    private func migrateLegacySettings() -> PersistedSettings? {
-        guard let raw = UserDefaults.standard.dictionary(forKey: legacyDefaultsKey) else { return nil }
+    private init() {
+        let raw = UserDefaults.standard.dictionary(forKey: defaultsKey) ?? [:]
 
         func bool(_ key: String, default fallback: Bool) -> Bool {
             if let value = raw[key] as? Bool { return value }
@@ -121,41 +33,36 @@ final class TemplateRuntimeSettings: ObservableObject {
             return fallback
         }
 
-        let migrated = PersistedSettings(
-            emulateDashboardControlRegions: bool("emulateDashboardControlRegions", default: true),
-            allowSystemCommands: bool("allowSystemCommands", default: true),
-            noAskSystemCommands: bool("noAskSystemCommands", default: false),
-            injectCSS: bool("injectCSS", default: true),
-            transparentBackground: bool("transparentBackground", default: true),
-            useNativeShadow: bool("useNativeShadow", default: Self.defaultUseNativeShadow()),
-            alwaysOnTop: bool("alwaysOnTop", default: false),
-            hideTitlebar: bool("hideTitlebar", default: false)
-        )
+        self.emulateDashboardControlRegions = bool("emulateDashboardControlRegions", default: true)
+        self.allowSystemCommands = bool("allowSystemCommands", default: true)
+        self.noAskSystemCommands = bool("noAskSystemCommands", default: false)
+        self.injectCSS = bool("injectCSS", default: true)
+        self.transparentBackground = bool("transparentBackground", default: true)
+        self.useNativeShadow = bool("useNativeShadow", default: Self.defaultUseNativeShadow())
+        self.alwaysOnTop = bool("alwaysOnTop", default: false)
+        self.hideTitlebar = bool("hideTitlebar", default: true)
 
-        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
-        return migrated
+        isReady = true
     }
 
-    private func saveIfReady() {
-        guard isReady else { return }
-        save()
+    private static func defaultUseNativeShadow() -> Bool {
+        // tahoe fucked up the window shadow
+        // default to native shadow on 15 and below
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 26
     }
 
     private func save() {
-        let settings = PersistedSettings(
-            emulateDashboardControlRegions: emulateDashboardControlRegions,
-            allowSystemCommands: allowSystemCommands,
-            noAskSystemCommands: noAskSystemCommands,
-            injectCSS: injectCSS,
-            transparentBackground: transparentBackground,
-            useNativeShadow: useNativeShadow,
-            alwaysOnTop: alwaysOnTop,
-            hideTitlebar: hideTitlebar
-        )
-
-        guard let data = try? JSONEncoder().encode(settings) else { return }
-        let folderURL = storageURL.deletingLastPathComponent()
-        try? fileManager.createDirectory(at: folderURL, withIntermediateDirectories: true)
-        try? data.write(to: storageURL, options: .atomic)
+        guard isReady else { return }
+        let raw: [String: Any] = [
+            "emulateDashboardControlRegions": emulateDashboardControlRegions,
+            "allowSystemCommands": allowSystemCommands,
+            "noAskSystemCommands": noAskSystemCommands,
+            "injectCSS": injectCSS,
+            "transparentBackground": transparentBackground,
+            "useNativeShadow": useNativeShadow,
+            "alwaysOnTop": alwaysOnTop,
+            "hideTitlebar": hideTitlebar
+        ]
+        UserDefaults.standard.set(raw, forKey: defaultsKey)
     }
 }
