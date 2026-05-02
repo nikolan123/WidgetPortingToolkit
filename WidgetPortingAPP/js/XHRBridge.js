@@ -8,6 +8,7 @@
 (function(){
   if (window.__nativeXHRInstalled) return;
   window.__nativeXHRInstalled = true;
+  window.__WidgetPortingNativeXMLHttpRequest = window.XMLHttpRequest;
 
   var pending = Object.create(null);
 

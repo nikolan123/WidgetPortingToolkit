@@ -16,6 +16,7 @@ struct WidgetTweaks: Codable, Hashable {
     var transparentBackground: Bool = true
     var xhrProxyEnabled: Bool = false
     var createBlankLocalizedStrings: Bool = true
+    var emulateDashboardControlRegions: Bool = true
 
     var allowSystemCommands: Bool = true
     var noAskSystemCommands: Bool = false

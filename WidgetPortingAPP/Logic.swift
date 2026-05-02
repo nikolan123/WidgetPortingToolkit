@@ -18,26 +18,36 @@ class BorderlessKeyWindow: NSWindow {
 extension Notification.Name {
     static let openCustomWindow = Notification.Name("openCustomWindow")
     static let resizeCustomWindow = Notification.Name("resizeCustomWindow")
+    static let dashboardCustomWindowDragStart = Notification.Name("dashboardCustomWindowDragStart")
+    static let dashboardCustomWindowDragEnd = Notification.Name("dashboardCustomWindowDragEnd")
 }
 
 fileprivate var openWindows: [NSWindow] = []
-fileprivate var overlayControllers: [String: WidgetOverlayController] = [:]
+fileprivate var overlayControllers: [ObjectIdentifier: WidgetOverlayController] = [:]
+fileprivate var windowCloseObservers: [ObjectIdentifier: NSObjectProtocol] = [:]
 fileprivate var globalFlagsMonitor: Any?
 fileprivate var globalKeyMonitor: Any?
+
+fileprivate func widgetWindow(for eventWindow: NSWindow?) -> NSWindow? {
+    guard let eventWindow else { return nil }
+    if openWindows.contains(where: { $0 === eventWindow }) {
+        return eventWindow
+    }
+    return openWindows.first { window in
+        window.childWindows?.contains(where: { $0 === eventWindow }) == true
+    }
+}
 
 // Centralized Option key monitor
 fileprivate func setupGlobalOverlayMonitor() {
     if globalFlagsMonitor == nil {
         globalFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             let optionHeld = event.modifierFlags.contains(.option)
-            
-            // Find key window and toggle its overlay
-            if let keyWindow = NSApp.keyWindow,
-               let windowId = keyWindow.identifier?.rawValue,
-               let controller = overlayControllers[windowId] {
+
+            for controller in overlayControllers.values {
                 controller.handleOptionKey(held: optionHeld)
             }
-            
+
             return event
         }
     }
@@ -47,11 +57,8 @@ fileprivate func setupGlobalOverlayMonitor() {
         globalKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             // Check for Cmd+W (keyCode 13 = W)
             if event.modifierFlags.contains(.command) && event.keyCode == 13 {
-                if let keyWindow = NSApp.keyWindow,
-                   let windowId = keyWindow.identifier?.rawValue,
-                   overlayControllers[windowId] != nil {
-                    // This is one of our widget windows
-                    keyWindow.close()
+                if let window = widgetWindow(for: NSApp.keyWindow) {
+                    window.close()
                     return nil // Consume the event
                 }
             }
@@ -87,12 +94,30 @@ struct AppInfo: Identifiable, Hashable {
     let height: CGFloat
     let iconURL: URL?
     let languages: [String]
+    let closeBoxInsetX: CGFloat
+    let closeBoxInsetY: CGFloat
 }
 
 // MARK: - ViewModel
 @MainActor
 class WidgetManager: ObservableObject {
     static let shared = WidgetManager()
+
+    enum FullScreenBackgroundStyle: String, CaseIterable, Identifiable {
+        case grid = "dbgrid"
+        case lego = "dblego"
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .grid: return "Grid"
+            case .lego: return "Lego"
+            }
+        }
+
+        var assetName: String { rawValue }
+    }
 
     private enum DefaultsKey {
         static let hasCompletedOOBE = "hasCompletedOOBE"
@@ -104,6 +129,7 @@ class WidgetManager: ObservableObject {
         static let portableMode = "portableMode"
         static let borderlessFullScreenWidgets = "borderlessFullScreenWidgets"
         static let allowMultipleInstances = "allowMultipleInstances"
+        static let fullScreenBackgroundStyle = "fullScreenBackgroundStyle"
     }
 
     private let defaults: UserDefaults
@@ -153,6 +179,11 @@ class WidgetManager: ObservableObject {
             defaults.set(allowMultipleInstances, forKey: DefaultsKey.allowMultipleInstances)
         }
     }
+    @Published var fullScreenBackgroundStyle: FullScreenBackgroundStyle {
+        didSet {
+            defaults.set(fullScreenBackgroundStyle.rawValue, forKey: DefaultsKey.fullScreenBackgroundStyle)
+        }
+    }
     @Published var appInfos: [AppInfo] = []
     @Published var selectedLanguages: [String: String] = [:]
     @Published private(set) var tweaksPerBundle: [String: WidgetTweaks] = [:]
@@ -163,6 +194,9 @@ class WidgetManager: ObservableObject {
     @Published var loadingProgressNumerator: Int = 0       // Number of widgets loaded so far
     @Published var loadingProgressDenominator: Int = 0     // Total number of widgets to load
     private var loadingWindow: NSWindow? = nil             // Reference to the loading progress window
+    var htmlExportWindow: NSWindow? = nil                  // Reference to the HTML export window
+    @Published private(set) var isDashboardFullScreenActive = false
+    private weak var dashboardFullScreenWindow: NSWindow?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -175,6 +209,9 @@ class WidgetManager: ObservableObject {
         self.portableMode = Self.readBool(defaults, key: DefaultsKey.portableMode, defaultValue: false)
         self.borderlessFullScreenWidgets = Self.readBool(defaults, key: DefaultsKey.borderlessFullScreenWidgets, defaultValue: true)
         self.allowMultipleInstances = Self.readBool(defaults, key: DefaultsKey.allowMultipleInstances, defaultValue: false)
+        self.fullScreenBackgroundStyle = FullScreenBackgroundStyle(
+            rawValue: defaults.string(forKey: DefaultsKey.fullScreenBackgroundStyle) ?? ""
+        ) ?? .grid
 
         // make sure as base exists
         do {
@@ -197,6 +234,36 @@ class WidgetManager: ObservableObject {
     private static func readBool(_ defaults: UserDefaults, key: String, defaultValue: Bool) -> Bool {
         guard defaults.object(forKey: key) != nil else { return defaultValue }
         return defaults.bool(forKey: key)
+    }
+
+    func setDashboardFullScreenActive(_ active: Bool, for window: NSWindow?) {
+        if active {
+            dashboardFullScreenWindow = window
+            isDashboardFullScreenActive = true
+            return
+        }
+
+        guard window == nil || dashboardFullScreenWindow == nil || dashboardFullScreenWindow == window else {
+            return
+        }
+
+        dashboardFullScreenWindow = nil
+        isDashboardFullScreenActive = false
+    }
+
+    private func hasActiveDashboardFullScreenWindow() -> Bool {
+        if let window = dashboardFullScreenWindow, window.styleMask.contains(.fullScreen) {
+            return true
+        }
+
+        let activeWindow = NSApp.windows.first { window in
+            (window.title == "Widget Porting Toolkit" || window.contentViewController is NSHostingController<AppRootView>)
+            && window.styleMask.contains(.fullScreen)
+        }
+
+        dashboardFullScreenWindow = activeWindow
+        isDashboardFullScreenActive = activeWindow != nil
+        return activeWindow != nil
     }
     
     @MainActor
@@ -419,7 +486,7 @@ class WidgetManager: ObservableObject {
         window.makeKeyAndOrderFront(nil)
         window.level = .floating
     }
-    
+
     func handleOpenedWidgetURL(_ folderURL: URL) {
         guard folderURL.lastPathComponent != "-NSDocumentRevisionsDebugMode" else { return } // xcode temp dir
         guard folderURL.pathExtension.lowercased() == "wdgt" else { return }
@@ -507,7 +574,7 @@ class WidgetManager: ObservableObject {
     }
 
     // Preprocess
-    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, tweaks: WidgetTweaks) -> URL? {
+    private func preprocessFolder(_ folder: URL, bundleID: String, id: String, mainHTMLPath: String, tweaks: WidgetTweaks) -> URL? {
         guard !supportDirectoryPath.isEmpty else {
             showError("No Support Directory set. Please select one (Options > Install Support Directory) before loading a widget.")
             return nil
@@ -526,8 +593,11 @@ class WidgetManager: ObservableObject {
         // Determine the support directory source (widgetresources)
         let installedSupportURL = URL(fileURLWithPath: supportDirectoryPath)
 
+        let mainDocumentDirectory = tempFolder.appendingPathComponent(mainHTMLPath).deletingLastPathComponent()
+
         // copy if requested
-        var supportPathForReplacement = installedSupportURL.path
+        let absoluteSupportPathForReplacement = "file://\(installedSupportURL.path)"
+        var copiedSupportDirectoryURL: URL?
         if tweaks.copySupportDirectory {
             let tempSupportDir = tempFolder.appendingPathComponent("SupportDirectory")
             do {
@@ -535,7 +605,7 @@ class WidgetManager: ObservableObject {
                     try fm.removeItem(at: tempSupportDir)
                 }
                 try fm.copyItem(at: installedSupportURL, to: tempSupportDir)
-                supportPathForReplacement = tempSupportDir.path
+                copiedSupportDirectoryURL = tempSupportDir
             } catch {
                 showError("Failed to copy Support Directory into \(bundleID): \(error.localizedDescription)")
                 return nil
@@ -543,37 +613,69 @@ class WidgetManager: ObservableObject {
         }
 
         // go thru each html,js,css and replace hardcoded library dir
-        let allowedExtensions = ["html", "js", "css"]
-        let fileEnumerator = fm.enumerator(at: tempFolder, includingPropertiesForKeys: nil)!
+        let allowedExtensions = Set(["html", "js", "css"])
+        guard let fileEnumerator = fm.enumerator(at: tempFolder, includingPropertiesForKeys: nil) else {
+            showError("Failed to enumerate widget files for preprocessing.")
+            return nil
+        }
 
         for case let fileURL as URL in fileEnumerator where allowedExtensions.contains(fileURL.pathExtension.lowercased()) {
             // localized files make it error
             if fileURL.path.contains(".lproj/") {
                 continue
             }
+            if ExportPathRules.shouldSkipExportedPath(fileURL, root: tempFolder) {
+                continue
+            }
             do {
-                var content = try String(contentsOf: fileURL, encoding: .utf8)
+                let original = try String(contentsOf: fileURL, encoding: .utf8)
+                var content = original
 
                 if tweaks.replaceFileSchemePaths {
-                    content = content.replacingOccurrences(
-                        of: "file:///System/Library/WidgetResources",
-                        with: "file://\(supportPathForReplacement)"
-                    )
-                    content = content.replacingOccurrences(
-                        of: "/System/Library/WidgetResources",
-                        with: "file://\(supportPathForReplacement)"
-                    )
-                    content = content.replacingOccurrences(
-                        of: "\"AppleClasses",
-                        with: "\"file://\(supportPathForReplacement)/AppleClasses"
-                    )
-                    // replace ~/Library/Widgets/[^ ]+\.wdgt with widget's new path
-                    let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
-                    content = content.replacingOccurrences(
-                        of: pattern,
-                        with: "file://\(tempFolder.path)$1",
-                        options: .regularExpression
-                    )
+                    if let copiedSupportDirectoryURL,
+                       fileURL.path.hasPrefix(copiedSupportDirectoryURL.path + "/") {
+                        // Copied SupportDirectory internals are patched separately below.
+                    } else {
+                        let fileDirectory = fileURL.deletingLastPathComponent()
+                        let supportPathSourceDirectory = fileURL.pathExtension.lowercased() == "js" ? mainDocumentDirectory : fileDirectory
+                        let supportPathForReplacement: String
+                        if let copiedSupportDirectoryURL {
+                            supportPathForReplacement = Self.relativePath(
+                                fromDirectory: supportPathSourceDirectory,
+                                toDirectory: copiedSupportDirectoryURL
+                            )
+                        } else {
+                            supportPathForReplacement = absoluteSupportPathForReplacement
+                        }
+                        let rootPathForFile = Self.relativePath(
+                            fromDirectory: fileDirectory,
+                            toDirectory: tempFolder
+                        )
+
+                        content = content.replacingOccurrences(
+                            of: "file:///System/Library/WidgetResources",
+                            with: supportPathForReplacement
+                        )
+                        content = content.replacingOccurrences(
+                            of: "/System/Library/WidgetResources",
+                            with: supportPathForReplacement
+                        )
+                        content = content.replacingOccurrences(
+                            of: "\"AppleClasses",
+                            with: "\"\(supportPathForReplacement)/AppleClasses"
+                        )
+                        content = content.replacingOccurrences(
+                            of: "'AppleClasses",
+                            with: "'\(supportPathForReplacement)/AppleClasses"
+                        )
+                        // replace ~/Library/Widgets/[^ ]+\.wdgt with widget's new path
+                        let pattern = #"~/Library/Widgets/(?:\\ |[^ ])+\.wdgt(.*)"#
+                        content = content.replacingOccurrences(
+                            of: pattern,
+                            with: "\(rootPathForFile)$1",
+                            options: .regularExpression
+                        )
+                    }
                 }
 
                 if tweaks.fixSelfClosingScriptTags {
@@ -586,13 +688,25 @@ class WidgetManager: ObservableObject {
                     )
                 }
 
-                let original = try String(contentsOf: fileURL, encoding: .utf8)
                 if content != original {
                     try content.write(to: fileURL, atomically: true, encoding: .utf8)
                 }
             } catch {
                 print("Failed to process file \(fileURL.lastPathComponent): \(error.localizedDescription)")
             }
+        }
+
+        if tweaks.copySupportDirectory,
+           tweaks.replaceFileSchemePaths,
+           let copiedSupportDirectoryURL {
+            let supportPathFromMainDocument = Self.relativePath(
+                fromDirectory: mainDocumentDirectory,
+                toDirectory: copiedSupportDirectoryURL
+            )
+            patchCopiedSupportDirectoryAssetPaths(
+                in: copiedSupportDirectoryURL,
+                supportPathFromMainDocument: supportPathFromMainDocument
+            )
         }
         
         if tweaks.createBlankLocalizedStrings {
@@ -604,6 +718,73 @@ class WidgetManager: ObservableObject {
         }
 
         return tempFolder
+    }
+
+    private func patchCopiedSupportDirectoryAssetPaths(in supportDirectory: URL, supportPathFromMainDocument: String) {
+        let fm = FileManager.default
+        let allowedExtensions = Set(["html", "js", "css"])
+        guard let enumerator = fm.enumerator(at: supportDirectory, includingPropertiesForKeys: nil) else { return }
+
+        for case let fileURL as URL in enumerator where allowedExtensions.contains(fileURL.pathExtension.lowercased()) {
+            guard var content = try? String(contentsOf: fileURL, encoding: .utf8) else { continue }
+
+            let original = content
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "file:///System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources/",
+                with: "\(supportPathFromMainDocument)/"
+            )
+            content = content.replacingOccurrences(
+                of: "/System/Library/WidgetResources",
+                with: supportPathFromMainDocument
+            )
+            for topLevelDirectory in ["button", "ibutton", "AppleClasses", "AppleParser"] {
+                content = content.replacingOccurrences(
+                    of: "../\(topLevelDirectory)/",
+                    with: "\(supportPathFromMainDocument)/\(topLevelDirectory)/"
+                )
+            }
+            content = content.replacingOccurrences(
+                of: "../resize.png",
+                with: "\(supportPathFromMainDocument)/resize.png"
+            )
+
+            if content != original {
+                try? content.write(to: fileURL, atomically: true, encoding: .utf8)
+            }
+        }
+    }
+
+    private static func relativePath(fromDirectory source: URL, toDirectory target: URL) -> String {
+        let src = source.standardizedFileURL.pathComponents
+        let dst = target.standardizedFileURL.pathComponents
+        var common = 0
+        while common < src.count && common < dst.count && src[common] == dst[common] {
+            common += 1
+        }
+
+        let upCount = max(0, src.count - common)
+        let up = String(repeating: "../", count: upCount)
+        let downParts = Array(dst.dropFirst(common))
+        let down = downParts.joined(separator: "/")
+
+        if up.isEmpty && down.isEmpty {
+            return "./"
+        }
+        if up.isEmpty {
+            return "./" + down
+        }
+        if down.isEmpty {
+            return up.hasSuffix("/") ? String(up.dropLast()) : up
+        }
+        return up + down
     }
 
     // widget loader
@@ -618,7 +799,13 @@ class WidgetManager: ObservableObject {
 
         let tweaks = self.tweaks(for: plistInfo.bundleIdentifier, id: id)
 
-        guard let processedFolder = preprocessFolder(folderURL, bundleID: plistInfo.bundleIdentifier, id: id, tweaks: tweaks) else {
+        guard let processedFolder = preprocessFolder(
+            folderURL,
+            bundleID: plistInfo.bundleIdentifier,
+            id: id,
+            mainHTMLPath: plistInfo.mainHTML,
+            tweaks: tweaks
+        ) else {
             return
         }
 
@@ -639,7 +826,9 @@ class WidgetManager: ObservableObject {
             width: plistInfo.width,
             height: plistInfo.height,
             iconURL: plistInfo.iconURL.map { processedFolder.appendingPathComponent($0.lastPathComponent) },
-            languages: plistInfo.languages
+            languages: plistInfo.languages,
+            closeBoxInsetX: plistInfo.closeBoxInsetX,
+            closeBoxInsetY: plistInfo.closeBoxInsetY
         )
 
         appInfos.append(newAppInfo)
@@ -701,14 +890,8 @@ class WidgetManager: ObservableObject {
         let width = tweaks.customWidth ?? appInfo.width
         let height = tweaks.customHeight ?? appInfo.height
         
-        // Check if any ContentView window is in fullscreen
-        let isAnyContentViewInFullscreen = NSApp.windows.contains(where: { window in
-            (window.title == "Widget Porting Toolkit" || window.contentViewController is NSHostingController<AppRootView>) 
-            && window.styleMask.contains(.fullScreen)
-        })
-
-        // If any ContentView is in fullscreen, use custom window system
-        if isAnyContentViewInFullscreen {
+        // If the Dashboard shell is fullscreen, use the custom window system inside that space.
+        if hasActiveDashboardFullScreenWindow() {
             NotificationCenter.default.post(
                 name: .openCustomWindow,
                 object: nil,
@@ -742,6 +925,7 @@ class WidgetManager: ObservableObject {
         }
 
         window.title = appInfo.displayName
+        window.isReleasedWhenClosed = false
         window.contentViewController = hosting
         window.hasShadow = tweaks.useNativeShadow
 
@@ -770,22 +954,31 @@ class WidgetManager: ObservableObject {
         openWindows.append(window)
         
         // Setup overlay controller for Option key
+        let windowKey = ObjectIdentifier(window)
         let overlayController = WidgetOverlayController(parentWindow: window, appInfo: appInfo, widgetManager: self)
-        overlayControllers[windowIdentifier] = overlayController
+        overlayControllers[windowKey] = overlayController
         
         // Setup global monitor on first window
         setupGlobalOverlayMonitor()
         
-        NotificationCenter.default.addObserver(
+        windowCloseObservers[windowKey] = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification,
             object: window,
             queue: .main
-        ) { [weak self] _ in
-            overlayControllers[windowIdentifier]?.cleanup()
-            overlayControllers.removeValue(forKey: windowIdentifier)
-            openWindows.removeAll { $0 == window }
-            cleanupGlobalOverlayMonitorIfNeeded()
-            NotificationCenter.default.removeObserver(self as Any, name: NSWindow.willCloseNotification, object: window)
+        ) { notification in
+            guard let closingWindow = notification.object as? NSWindow else { return }
+            overlayControllers[windowKey]?.parentWindowWillClose()
+
+            DispatchQueue.main.async {
+                overlayControllers.removeValue(forKey: windowKey)
+                openWindows.removeAll { $0 === closingWindow }
+
+                if let observer = windowCloseObservers.removeValue(forKey: windowKey) {
+                    NotificationCenter.default.removeObserver(observer)
+                }
+
+                cleanupGlobalOverlayMonitorIfNeeded()
+            }
         }
     }
 

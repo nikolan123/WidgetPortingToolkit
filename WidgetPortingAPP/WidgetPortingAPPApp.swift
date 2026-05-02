@@ -141,15 +141,18 @@ struct WidgetPortingAPPApp: App {
                 Toggle("Launch in Full Screen by Default", isOn: $widgetManager.defaultLaunchFullScreen)
                 Toggle("Borderless Widgets", isOn: $widgetManager.borderlessFullScreenWidgets)
                 Toggle("Allow multiple instances of the same widget", isOn: $widgetManager.allowMultipleInstances)
+                Menu("Fullscreen Background") {
+                    ForEach(WidgetManager.FullScreenBackgroundStyle.allCases) { style in
+                        Toggle(style.title, isOn: fullScreenBackgroundBinding(for: style))
+                    }
+                }
 
                 Divider()
                 
                 Button("Set Default Language") {
                     widgetManager.openDefaultLanguageSetting()
                 }
-                
-                Divider()
-                
+
                 Button("Install Support Directory…") {
                     widgetManager.browseAndInstallSupportDirectory()
                     DispatchQueue.main.async {
@@ -161,6 +164,10 @@ struct WidgetPortingAPPApp: App {
                         alert.addButton(withTitle: "OK")
                         alert.runModal()
                     }
+                }
+                
+                Button("Open Widget Exporter…") {
+                    widgetManager.openHTMLExportWindow()
                 }
 
                 Button("Open Data Folder…") {
@@ -208,5 +215,15 @@ struct WidgetPortingAPPApp: App {
                 }
             }
         }
+    }
+
+    private func fullScreenBackgroundBinding(for style: WidgetManager.FullScreenBackgroundStyle) -> Binding<Bool> {
+        Binding(
+            get: { widgetManager.fullScreenBackgroundStyle == style },
+            set: { isSelected in
+                guard isSelected else { return }
+                widgetManager.fullScreenBackgroundStyle = style
+            }
+        )
     }
 }

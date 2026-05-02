@@ -18,6 +18,7 @@ private struct IconFramePreferenceKey: PreferenceKey {
 struct FullScreenBackgroundView: View {
     @ObservedObject var widgetManager: WidgetManager
     @State private var isOverlayVisible = false
+    @State private var isCloseButtonsVisible = false
     @State private var expandedGroup: [AppInfo]? = nil
     @State private var showingTweaksForApp: AppInfo?
     @State private var languagePopoverApp: AppInfo? = nil
@@ -40,18 +41,23 @@ struct FullScreenBackgroundView: View {
         ZStack {
             // Background
             ZStack {
-                if colorScheme == .dark { // can be a one liner on 14.0+
-                    Color.clear
-                        .ignoresSafeArea()
+                if widgetManager.fullScreenBackgroundStyle == .grid {
+                    if colorScheme == .dark { // can be a one liner on 14.0+
+                        Color.clear
+                            .ignoresSafeArea()
+                    } else {
+                        Color(hex: "#3b3b3d")
+                            .ignoresSafeArea()
+                    }
                 } else {
-                    Color(hex: "#3b3b3d")
+                    Color.clear
                         .ignoresSafeArea()
                 }
                 
                 GeometryReader { _ in
                     Color.clear
                         .background(
-                            Image("dbgrid")
+                            Image(widgetManager.fullScreenBackgroundStyle.assetName)
                                 .resizable(resizingMode: .tile)
                         )
                         .ignoresSafeArea()
@@ -59,24 +65,29 @@ struct FullScreenBackgroundView: View {
                 .blur(radius: isOverlayVisible ? 2 : 0)
                 .animation(.easeInOut(duration: 0.2), value: isOverlayVisible)
                 
-                RadialGradient(
-                    gradient: Gradient(stops: [
-                        .init(color: Color(hex: "#555456").opacity(0.12), location: 0.0),
-                        .init(color: Color(hex: "#4d4c4e").opacity(0.25), location: 0.4),
-                        .init(color: Color(hex: "#444443").opacity(0.45), location: 0.7),
-                        .init(color: Color(hex: "#3e3f3d").opacity(0.6), location: 1.0)
-                    ]),
-                    center: .center,
-                    startRadius: 50,
-                    endRadius: 700
-                )
-                .blendMode(.overlay)
-                .ignoresSafeArea()
+                if widgetManager.fullScreenBackgroundStyle == .grid {
+                    RadialGradient(
+                        gradient: Gradient(stops: [
+                            .init(color: Color(hex: "#555456").opacity(0.12), location: 0.0),
+                            .init(color: Color(hex: "#4d4c4e").opacity(0.25), location: 0.4),
+                            .init(color: Color(hex: "#444443").opacity(0.45), location: 0.7),
+                            .init(color: Color(hex: "#3e3f3d").opacity(0.6), location: 1.0)
+                        ]),
+                        center: .center,
+                        startRadius: 50,
+                        endRadius: 700
+                    )
+                    .blendMode(.overlay)
+                    .ignoresSafeArea()
+                }
             }
             .zIndex(0)
             
             // Custom window container
-            CustomWindowContainer(widgetManager: widgetManager)
+            CustomWindowContainer(
+                widgetManager: widgetManager,
+                showCloseButtons: isCloseButtonsVisible
+            )
                 .opacity(isOverlayVisible ? 0 : 1)
                 .allowsHitTesting(!isOverlayVisible)
                 .animation(.easeInOut(duration: 0.2), value: isOverlayVisible)
@@ -331,8 +342,11 @@ struct FullScreenBackgroundView: View {
                 HStack {
                     Button {
                         withAnimation(.spring()) {
-                            isOverlayVisible.toggle()
-                            if !isOverlayVisible {
+                            let newOverlayVisibility = !isOverlayVisible
+                            isOverlayVisible = newOverlayVisibility
+                            if newOverlayVisibility {
+                                isCloseButtonsVisible = false
+                            } else {
                                 expandedGroup = nil
                                 expandedAnchor = nil
                             }
@@ -345,23 +359,31 @@ struct FullScreenBackgroundView: View {
                     }
                     .buttonStyle(.plain)
                     
-                    Button(action: {
-                        print("minus")
-                    }) {
+                    Button {
+                        withAnimation(.spring()) {
+                            isCloseButtonsVisible.toggle()
+                            if isCloseButtonsVisible {
+                                isOverlayVisible = false
+                                expandedGroup = nil
+                                expandedAnchor = nil
+                            }
+                        }
+                    } label: {
                         Image("minusbutton")
                             .resizable()
                             .frame(width: 45, height: 45)
+                            .opacity(isCloseButtonsVisible ? 0.6 : 1.0)
                     }
+                    .buttonStyle(.plain)
                     
                     if isOverlayVisible {
-                        Button(action: {
-                            print("more widgets button")
-                        }) {
+                        Link(destination: URL(string: "https://widgets.nikolan.net/getwidgets")!) {
                             Image("MoreWidgetsText")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(height: 45)
                         }
+                        .buttonStyle(.plain)
                     }
                     
                     Spacer()
@@ -394,6 +416,8 @@ struct FullScreenBackgroundView: View {
                     expandedAnchor = nil
                 } else if isOverlayVisible {
                     isOverlayVisible = false
+                } else if isCloseButtonsVisible {
+                    isCloseButtonsVisible = false
                 }
             }
         }
@@ -529,7 +553,9 @@ final class PreviewWidgetManager: WidgetManager {
             width: 800,
             height: 600,
             iconURL: nil,
-            languages: ["en"]
+            languages: ["en"],
+            closeBoxInsetX: 15,
+            closeBoxInsetY: 15
         )
     } + [
         AppInfo(
@@ -543,7 +569,9 @@ final class PreviewWidgetManager: WidgetManager {
             width: 1024,
             height: 768,
             iconURL: nil,
-            languages: ["en"]
+            languages: ["en"],
+            closeBoxInsetX: 15,
+            closeBoxInsetY: 15
         )
     ]
     

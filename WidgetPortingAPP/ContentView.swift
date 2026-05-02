@@ -71,7 +71,8 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEnterFullScreenNotification)) { notification in
             // Only update if it's our window
-            if let window = notification.object as? NSWindow, window == hostingWindow {
+            if let window = notification.object as? NSWindow, isHostingWindow(window) {
+                hostingWindow = window
                 // Check if another ContentView window is already in fullscreen
                 let hasOtherFullscreenWindow = NSApplication.shared.windows.contains(where: { otherWindow in
                     otherWindow != window &&
@@ -92,14 +93,15 @@ struct ContentView: View {
                         alert.runModal()
                     }
                 } else {
-                    updateIsFullScreen()
+                    setFullScreenState(true, for: window)
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didExitFullScreenNotification)) { notification in
             // Only update if it's our window
-            if let window = notification.object as? NSWindow, window == hostingWindow {
-                updateIsFullScreen()
+            if let window = notification.object as? NSWindow, isHostingWindow(window) {
+                hostingWindow = window
+                setFullScreenState(false, for: window)
             }
         }
         .onDrop(of: ["public.file-url"], isTargeted: nil) { providers in
@@ -110,8 +112,19 @@ struct ContentView: View {
     private func updateIsFullScreen() {
         // Check the actual window this view is in
         if let window = hostingWindow {
-            isFullScreen = window.styleMask.contains(.fullScreen)
+            setFullScreenState(window.styleMask.contains(.fullScreen), for: window)
         }
+    }
+
+    private func setFullScreenState(_ active: Bool, for window: NSWindow?) {
+        isFullScreen = active
+        widgetManager.setDashboardFullScreenActive(active, for: window)
+    }
+
+    private func isHostingWindow(_ window: NSWindow) -> Bool {
+        window == hostingWindow ||
+        window.title == "Widget Porting Toolkit" ||
+        window.contentViewController is NSHostingController<AppRootView>
     }
 }
 
@@ -359,8 +372,19 @@ struct TweaksSheet: View {
 
             // Runtime section
             VStack(alignment: .leading, spacing: 10) {
-                Text("Runtime")
-                    .font(.headline)
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Runtime")
+                        .font(.headline)
+
+                    Spacer()
+
+                    if !isInstallWindow {
+                        Text("Runtime changes will apply on the next widget launch.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
 
                 Toggle("Recreate Dashboard API", isOn: $working.recreateDashboardAPI)
                     .onChange(of: working.recreateDashboardAPI) { newValue in
@@ -385,6 +409,8 @@ struct TweaksSheet: View {
                 .padding(.leading, 20)
 
                 Toggle("Inject helper CSS (disable drag/select)", isOn: $working.injectCSS)
+                Toggle("Emulate Dashboard control regions", isOn: $working.emulateDashboardControlRegions)
+                    .disabled(!working.recreateDashboardAPI)
                 Toggle("Proxy XMLHttpRequest", isOn: $working.xhrProxyEnabled)
                 Toggle("Transparent background", isOn: $working.transparentBackground)
                 Toggle("Use native window shadow", isOn: $working.useNativeShadow)
@@ -413,15 +439,6 @@ struct TweaksSheet: View {
                 Toggle("Add a blank localizedStrings.js if it doesn't exist", isOn: $working.createBlankLocalizedStrings)
             }
             .disabled(!isInstallWindow)
-
-            Divider()
-            
-            if !isInstallWindow {
-                Text("Runtime changes will apply on the next widget launch.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
 
             // Action buttons
             HStack {

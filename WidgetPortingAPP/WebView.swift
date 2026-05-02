@@ -11,9 +11,16 @@ import WebKit
 struct WebView: NSViewRepresentable {
     let appInfo: AppInfo
     let tweaks: WidgetTweaks
+    let windowInstanceID: UUID?
+
+    init(appInfo: AppInfo, tweaks: WidgetTweaks, windowInstanceID: UUID? = nil) {
+        self.appInfo = appInfo
+        self.tweaks = tweaks
+        self.windowInstanceID = windowInstanceID
+    }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(appInfo: appInfo, tweaks: tweaks)
+        Coordinator(appInfo: appInfo, tweaks: tweaks, windowInstanceID: windowInstanceID)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -71,17 +78,39 @@ struct WebView: NSViewRepresentable {
                     )
                 )
 
+                if tweaks.emulateDashboardControlRegions,
+                   let dragRegions = loadJSFromBundle(named: "DashboardDragRegions") {
+                    let dragRegionsScript = dragRegions.replacingOccurrences(
+                        of: "__DASHBOARD_REGION_CSS__",
+                        with: dashboardRegionCSSJSONString(for: appInfo.tempFolder)
+                    )
+                    controller.addUserScript(
+                        WKUserScript(
+                            source: dragRegionsScript,
+                            injectionTime: .atDocumentEnd,
+                            forMainFrameOnly: true
+                        )
+                    )
+                }
+
                 // Add message handlers
                 controller.add(context.coordinator, name: "openURL")
+                controller.add(context.coordinator, name: "openApplication")
                 controller.add(context.coordinator, name: "setPreferenceForKey")
                 controller.add(context.coordinator, name: "prepareForTransition")
                 controller.add(context.coordinator, name: "performTransition")
                 controller.add(context.coordinator, name: "resizeTo")
+                controller.add(context.coordinator, name: "dashboardDragStart")
+                controller.add(context.coordinator, name: "dashboardDragEnd")
             }
         }
         
         if tweaks.recreateDashboardAPI && tweaks.allowSystemCommands {
-            if let systemInjectScript = loadJSFromBundle(named: "SystemInject") {
+            if let rawSystemInjectScript = loadJSFromBundle(named: "SystemInject") {
+                let systemInjectScript = rawSystemInjectScript.replacingOccurrences(
+                    of: "__WIDGET_SYSTEM_SCHEME_ENABLED__",
+                    with: "true"
+                )
                 controller.addUserScript(
                     WKUserScript(
                         source: systemInjectScript,
@@ -93,6 +122,9 @@ struct WebView: NSViewRepresentable {
                 controller.add(context.coordinator, name: "systemCommand")
             }
 
+            // Register URL scheme handler for synchronous widget.system() calls
+            let schemeHandler = SystemSchemeHandler(appInfo: appInfo, noAsk: tweaks.noAskSystemCommands)
+            configuration.setURLSchemeHandler(schemeHandler, forURLScheme: "widget-system")
         }
 
         // css injection
@@ -127,18 +159,23 @@ struct WebView: NSViewRepresentable {
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let appInfo: AppInfo
         let tweaks: WidgetTweaks
+        let windowInstanceID: UUID?
         let namespace: String
         weak var webView: WKWebView?
         private var transitionDirection: String?
+        private var dragInitialWindowOrigin: CGPoint?
+        private var dragInitialMouseLocation: CGPoint?
+        private var dragEventMonitor: Any?
 
         // XHR-native management
         private lazy var xhrProxy: NativeXHRProxy? = {
             return tweaks.xhrProxyEnabled ? NativeXHRProxy(owner: self) : nil
         }()
 
-        init(appInfo: AppInfo, tweaks: WidgetTweaks) {
+        init(appInfo: AppInfo, tweaks: WidgetTweaks, windowInstanceID: UUID?) {
             self.appInfo = appInfo
             self.tweaks = tweaks
+            self.windowInstanceID = windowInstanceID
             self.namespace = "WidgetPrefs::" + appInfo.bundleIdentifier + "_" + appInfo.id
             print("Prefs namespace: \(self.namespace)")
         }
@@ -149,6 +186,9 @@ struct WebView: NSViewRepresentable {
                 if let s = message.body as? String, let u = URL(string: s) {
                     NSWorkspace.shared.open(u)
                 }
+            case "openApplication":
+                guard let bundleIdentifier = message.body as? String else { return }
+                openApplication(withBundleIdentifier: bundleIdentifier)
             case "setPreferenceForKey":
                 guard let dict = message.body as? [String: Any],
                       let key = dict["key"] as? String else { return }
@@ -182,6 +222,11 @@ struct WebView: NSViewRepresentable {
                     SystemRunner.runStreaming(command: command, token: token, webView: message.webView!, appInfo: appInfo, noAsk: tweaks.noAskSystemCommands)
                 } else if action == "cancel" {
                     SystemRunner.cancel(token: token)
+                } else if action == "write" {
+                    guard let string = dict["string"] as? String else { return }
+                    SystemRunner.write(token: token, string: string)
+                } else if action == "close" {
+                    SystemRunner.closeStdin(token: token)
                 }
                 
             case "resizeTo":
@@ -213,13 +258,31 @@ struct WebView: NSViewRepresentable {
                         NotificationCenter.default.post(
                             name: .resizeCustomWindow,
                             object: nil,
-                            userInfo: [
+                            userInfo: customWindowUserInfo([
                                 "appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id,
                                 "width": w,
                                 "height": h
-                            ]
+                            ])
                         )
                     }
+                }
+
+            case "dashboardDragStart":
+                guard tweaks.emulateDashboardControlRegions,
+                      let window = webView?.window else { return }
+                if window.styleMask.contains(.fullScreen) {
+                    postCustomWindowDragNotification(.dashboardCustomWindowDragStart)
+                    callDashboardDragHook("onstartdrag")
+                } else {
+                    beginNativeDashboardDrag(window: window)
+                }
+
+            case "dashboardDragEnd":
+                if let window = webView?.window, window.styleMask.contains(.fullScreen) {
+                    postCustomWindowDragNotification(.dashboardCustomWindowDragEnd)
+                    callDashboardDragHook("onenddrag")
+                } else {
+                    endNativeDashboardDrag(callEndHook: true)
                 }
 
             // --- Native XHR handlers ---
@@ -288,6 +351,102 @@ struct WebView: NSViewRepresentable {
             view.layer?.add(animation, forKey: "flip")
             CATransaction.commit()
         }
+
+        private func beginNativeDashboardDrag(window: NSWindow) {
+            dragInitialWindowOrigin = window.frame.origin
+            dragInitialMouseLocation = NSEvent.mouseLocation
+            callDashboardDragHook("onstartdrag")
+
+            if dragEventMonitor == nil {
+                dragEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
+                    self?.handleNativeDashboardDragEvent(event)
+                    return event
+                }
+            }
+        }
+
+        private func handleNativeDashboardDragEvent(_ event: NSEvent) {
+            guard let initialWindowOrigin = dragInitialWindowOrigin,
+                  let initialMouseLocation = dragInitialMouseLocation,
+                  let window = webView?.window,
+                  !window.styleMask.contains(.fullScreen) else {
+                endNativeDashboardDrag(callEndHook: false)
+                return
+            }
+
+            switch event.type {
+            case .leftMouseDragged:
+                let mouseLocation = NSEvent.mouseLocation
+                window.setFrameOrigin(CGPoint(
+                    x: initialWindowOrigin.x + mouseLocation.x - initialMouseLocation.x,
+                    y: initialWindowOrigin.y + mouseLocation.y - initialMouseLocation.y
+                ))
+            case .leftMouseUp:
+                endNativeDashboardDrag(callEndHook: true)
+            default:
+                break
+            }
+        }
+
+        private func endNativeDashboardDrag(callEndHook: Bool) {
+            guard dragInitialWindowOrigin != nil || dragEventMonitor != nil else { return }
+
+            dragInitialWindowOrigin = nil
+            dragInitialMouseLocation = nil
+
+            if let monitor = dragEventMonitor {
+                NSEvent.removeMonitor(monitor)
+                dragEventMonitor = nil
+            }
+
+            if callEndHook {
+                callDashboardDragHook("onenddrag")
+            }
+        }
+
+        private func callDashboardDragHook(_ name: String) {
+            webView?.evaluateJavaScript("""
+            (function() {
+                try {
+                    var widgetHook = window.widget && window.widget.\(name);
+                    var windowHook = window.\(name);
+                    if (typeof widgetHook === 'function') widgetHook();
+                    if (typeof windowHook === 'function' && windowHook !== widgetHook) windowHook();
+                } catch (e) {}
+            })();
+            """, completionHandler: nil)
+        }
+
+        private func postCustomWindowDragNotification(_ name: Notification.Name) {
+            NotificationCenter.default.post(
+                name: name,
+                object: nil,
+                userInfo: customWindowUserInfo([
+                    "appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id
+                ])
+            )
+        }
+
+        private func customWindowUserInfo(_ base: [String: Any]) -> [String: Any] {
+            var userInfo = base
+            if let windowInstanceID {
+                userInfo["windowInstanceID"] = windowInstanceID.uuidString
+            }
+            return userInfo
+        }
+
+        private func openApplication(withBundleIdentifier bundleIdentifier: String) {
+            let trimmed = bundleIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: trimmed) else { return }
+            NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
+        }
+
+        deinit {
+            if let monitor = dragEventMonitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
     }
     func loadJSFromBundle(named name: String, inFolder folder: String? = nil) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "js", subdirectory: folder),
@@ -297,5 +456,26 @@ struct WebView: NSViewRepresentable {
             return nil
         }
         return js
+    }
+
+    func dashboardRegionCSSJSONString(for folder: URL) -> String {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else { return "[]" }
+
+        var stylesheetSources: [String] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension.caseInsensitiveCompare("css") == .orderedSame {
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+            if let css = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1),
+               css.contains("-apple-dashboard-region") {
+                stylesheetSources.append(css)
+            }
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: stylesheetSources, options: []),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+
+        return json
     }
 }

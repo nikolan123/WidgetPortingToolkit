@@ -44,6 +44,10 @@
     window.widget.openURL = function(url) {
         try { window.webkit.messageHandlers.openURL.postMessage(url); } catch(e) {}
     };
+
+    window.widget.openApplication = function(bundleId) {
+        try { window.webkit.messageHandlers.openApplication.postMessage(bundleId); } catch(e) {}
+    };
     
     /* window resize */
     
@@ -53,12 +57,6 @@
         } else {
             console.log("resizeTo requested:", w, h);
         }
-    };
-    
-    /* not implemented */
-    
-    window.widget.openApplication = function(app) {
-        console.warn("openApplication not implemented. App: " + app);
     };
     
     window.widget.setCloseBoxOffset = function(x, y)

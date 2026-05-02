@@ -33,6 +33,7 @@ struct CustomWindowContainer: View {
     @State private var focusedWindowId: UUID?
     @State private var isOptionHeld: Bool = false
     @ObservedObject var widgetManager: WidgetManager
+    let showCloseButtons: Bool
     
     private func bringToFront(_ window: CustomWindow) {
         if focusedWindowId == window.id { return }
@@ -59,7 +60,7 @@ struct CustomWindowContainer: View {
                 CustomWindowView(
                     window: window,
                     widgetManager: widgetManager,
-                    isOptionHeld: isOptionHeld,
+                    isOptionHeld: isOptionHeld && focusedWindowId == window.id,
                     onClose: { windowId in
                         withAnimation(.easeInOut(duration: 0.1)) {
                             openWindows.removeAll { $0.id == windowId }
@@ -72,6 +73,24 @@ struct CustomWindowContainer: View {
                         bringToFront(window)
                     }
                 )
+            }
+
+            if showCloseButtons {
+                ForEach(openWindows) { window in
+                    DashboardCloseBoxOverlay(
+                        window: window,
+                        widgetManager: widgetManager,
+                        onClose: {
+                            withAnimation(.easeInOut(duration: 0.1)) {
+                                openWindows.removeAll { $0.id == window.id }
+                                if focusedWindowId == window.id {
+                                    focusedWindowId = openWindows.last?.id
+                                }
+                            }
+                        }
+                    )
+                    .zIndex(1000)
+                }
             }
             
             OptionKeyMonitor(isOptionHeld: $isOptionHeld)
@@ -128,20 +147,37 @@ struct CustomWindowContainer: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .resizeCustomWindow)) { notification in
-            if let userInfo = notification.userInfo,
-               let appIdentifier = userInfo["appIdentifier"] as? String,
-               let width = userInfo["width"] as? CGFloat,
-               let height = userInfo["height"] as? CGFloat {
-                
-                // Find the window that matches this app identifier and update its size
-                for window in openWindows {
-                    let windowIdentifier = window.appInfo.bundleIdentifier + "_" + window.appInfo.id
-                    if windowIdentifier == appIdentifier {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            window.size = CGSize(width: width, height: height)
-                        }
-                        break
-                    }
+            guard let userInfo = notification.userInfo,
+                let width = userInfo["width"] as? CGFloat,
+                let height = userInfo["height"] as? CGFloat else {
+                return
+            }
+
+            // Instance-aware path. If an instance ID is present, it is authoritative.
+            // Do not fall back to appIdentifier if the instance no longer exists,
+            // because that can resize the wrong same-widget window.
+            if let windowInstanceID = notification.windowInstanceID {
+                guard let window = openWindows.first(where: { $0.id.uuidString == windowInstanceID }) else {
+                    return
+                }
+
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    window.size = CGSize(width: width, height: height)
+                }
+                return
+            }
+
+            // Legacy app-level resize path. Used only for non-instance-aware callers.
+            guard let appIdentifier = userInfo["appIdentifier"] as? String else {
+                return
+            }
+
+            if let window = openWindows.first(where: { window in
+                let windowIdentifier = window.appInfo.bundleIdentifier + "_" + window.appInfo.id
+                return windowIdentifier == appIdentifier
+            }) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    window.size = CGSize(width: width, height: height)
                 }
             }
         }
@@ -165,6 +201,9 @@ struct CustomWindowView: View {
     @State private var isResizing = false
     @State private var initialSize: CGSize = .zero
     @State private var initialDragPosition: CGPoint = .zero
+    @State private var dashboardDragInitialPosition: CGPoint = .zero
+    @State private var dashboardDragInitialMouseLocation: CGPoint = .zero
+    @State private var dashboardDragMonitor: Any?
     
     var body: some View {
         ZStack {
@@ -222,7 +261,7 @@ struct CustomWindowView: View {
                 }
                 
                 // MARK: WebView content
-                WebView(appInfo: window.appInfo, tweaks: window.tweaks)
+                WebView(appInfo: window.appInfo, tweaks: window.tweaks, windowInstanceID: window.id)
                     .frame(width: window.size.width, height: window.size.height)
                     .background(window.tweaks.transparentBackground ? Color.clear : Color(NSColor.windowBackgroundColor))
             }
@@ -264,7 +303,7 @@ struct CustomWindowView: View {
                     },
                     onResizeEnd: {
                         isResizing = false
-                        widgetManager.resizeWindow(for: window.appInfo, width: window.size.width, height: window.size.height)
+                        saveCurrentSize()
                     }
                 )
                 .frame(
@@ -281,6 +320,122 @@ struct CustomWindowView: View {
         .onTapGesture {
             onFocus(window)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .dashboardCustomWindowDragStart)) { notification in
+            guard matchesWindowNotification(notification) else { return }
+            beginDashboardContentDrag()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .dashboardCustomWindowDragEnd)) { notification in
+            guard matchesWindowNotification(notification) else { return }
+            endDashboardContentDrag()
+        }
+        .onDisappear {
+            endDashboardContentDrag()
+        }
+    }
+
+    private var appIdentifier: String {
+        window.appInfo.bundleIdentifier + "_" + window.appInfo.id
+    }
+
+    private func matchesWindowNotification(_ notification: Notification) -> Bool {
+        if let windowInstanceID = notification.windowInstanceID {
+            return windowInstanceID == window.id.uuidString
+        }
+        return notification.appIdentifier == appIdentifier
+    }
+
+    private func saveCurrentSize() {
+        var tweaks = widgetManager.tweaks(for: window.appInfo.bundleIdentifier, id: window.appInfo.id)
+        tweaks.customWidth = window.size.width
+        tweaks.customHeight = window.size.height
+        widgetManager.updateTweaks(for: window.appInfo.bundleIdentifier, id: window.appInfo.id, to: tweaks)
+    }
+
+    private func beginDashboardContentDrag() {
+        dashboardDragInitialPosition = window.position
+        dashboardDragInitialMouseLocation = NSEvent.mouseLocation
+        onFocus(window)
+
+        if dashboardDragMonitor == nil {
+            dashboardDragMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { event in
+                handleDashboardContentDragEvent(event)
+                return event
+            }
+        }
+    }
+
+    private func handleDashboardContentDragEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDragged:
+            let mouseLocation = NSEvent.mouseLocation
+            window.position = CGPoint(
+                x: dashboardDragInitialPosition.x + mouseLocation.x - dashboardDragInitialMouseLocation.x,
+                y: dashboardDragInitialPosition.y - (mouseLocation.y - dashboardDragInitialMouseLocation.y)
+            )
+        case .leftMouseUp:
+            endDashboardContentDrag()
+        default:
+            break
+        }
+    }
+
+    private func endDashboardContentDrag() {
+        if let monitor = dashboardDragMonitor {
+            NSEvent.removeMonitor(monitor)
+            dashboardDragMonitor = nil
+        }
+    }
+}
+
+private struct DashboardCloseBoxOverlay: View {
+    @ObservedObject var window: CustomWindow
+    @ObservedObject var widgetManager: WidgetManager
+    let onClose: () -> Void
+    @State private var isPressed = false
+
+    private let closeBoxSize: CGFloat = 30
+
+    var body: some View {
+        ZStack {
+            Color.clear
+                .frame(width: closeBoxSize, height: closeBoxSize)
+
+            Image(isPressed ? "ecsb_closebox_pressed" : "ecsb_closebox")
+                .resizable()
+                .frame(width: closeBoxSize, height: closeBoxSize)
+        }
+            .contentShape(Rectangle())
+            .position(closeButtonCenter)
+            .onLongPressGesture(
+                minimumDuration: 0,
+                maximumDistance: closeBoxSize
+            ) {
+            } onPressingChanged: { pressing in
+                isPressed = pressing
+            }
+            .highPriorityGesture(
+                TapGesture().onEnded {
+                    onClose()
+                }
+            )
+    }
+
+    private var closeButtonCenter: CGPoint {
+        let titleBarOffset = widgetManager.borderlessFullScreenWidgets ? CGFloat(0) : CGFloat(-14)
+        return CGPoint(
+            x: window.position.x + window.appInfo.closeBoxInsetX,
+            y: window.position.y + window.appInfo.closeBoxInsetY + titleBarOffset
+        )
+    }
+}
+
+private extension Notification {
+    var appIdentifier: String? {
+        userInfo?["appIdentifier"] as? String
+    }
+
+    var windowInstanceID: String? {
+        userInfo?["windowInstanceID"] as? String
     }
 }
 
@@ -366,7 +521,9 @@ struct OptionKeyMonitor: NSViewRepresentable {
         width: 223,
         height: 225,
         iconURL: URL(fileURLWithPath: "/Users/niko/Documents/code/widgetporting/Widgets_10.5/Stickies.wdgt/Icon.png"),
-        languages: ["English", "German", "French", "I miss the misery"]
+        languages: ["English", "German", "French", "I miss the misery"],
+        closeBoxInsetX: 15,
+        closeBoxInsetY: 15
     )
 
     let tweaks = WidgetTweaks(transparentBackground: true)

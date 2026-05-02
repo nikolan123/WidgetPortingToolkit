@@ -18,6 +18,8 @@ struct ParsedInfo {
     let height: CGFloat
     let iconURL: URL?
     let languages: [String]
+    let closeBoxInsetX: CGFloat
+    let closeBoxInsetY: CGFloat
 }
 
 func parsePlist(from folderURL: URL, showError: (String) -> Void) -> ParsedInfo? {
@@ -43,8 +45,10 @@ func parsePlist(from folderURL: URL, showError: (String) -> Void) -> ParsedInfo?
     let version = plist["CFBundleShortVersionString"] as? String ?? "unknown"
 
     // Try explicit width/height, or fall back to default.png size, or default to 800x600
-    let plistWidth = plist["Width"] as? CGFloat
-    let plistHeight = plist["Height"] as? CGFloat
+    let plistWidth = cgFloatValue(plist["Width"])
+    let plistHeight = cgFloatValue(plist["Height"])
+    let closeBoxInsetX = cgFloatValue(plist["CloseBoxInsetX"]) ?? 15
+    let closeBoxInsetY = cgFloatValue(plist["CloseBoxInsetY"]) ?? 15
 
     let (width, height): (CGFloat, CGFloat) = {
         if plistWidth == nil && plistHeight == nil {
@@ -87,8 +91,18 @@ func parsePlist(from folderURL: URL, showError: (String) -> Void) -> ParsedInfo?
         width: width,
         height: height,
         iconURL: iconURL,
-        languages: languages
+        languages: languages,
+        closeBoxInsetX: closeBoxInsetX,
+        closeBoxInsetY: closeBoxInsetY
     )
+}
+
+private func cgFloatValue(_ value: Any?) -> CGFloat? {
+    if let value = value as? CGFloat { return value }
+    if let value = value as? NSNumber { return CGFloat(truncating: value) }
+    if let value = value as? Double { return CGFloat(value) }
+    if let value = value as? Int { return CGFloat(value) }
+    return nil
 }
 
 private func defaultPNGSize(in folder: URL) -> CGSize? {
