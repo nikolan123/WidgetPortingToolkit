@@ -101,6 +101,15 @@ enum TemplateAboutMetadataDecoder {
 struct TemplateAboutWindow: View {
     let metadata: TemplateAboutMetadata
 
+    private var gitCommitShort: String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "GitCommitShort") as? String,
+              !value.isEmpty,
+              value != "Unknown" else {
+            return nil
+        }
+        return value
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .top, spacing: 20) {
@@ -133,9 +142,17 @@ struct TemplateAboutWindow: View {
                 .overlay(Color(nsColor: NSColor(calibratedRed: 0.83, green: 0.34, blue: 0.78, alpha: 0.35)))
 
             HStack(spacing: 8) {
-                Text("Widget Porting Toolkit")
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text("Widget Porting Toolkit")
+                        .font(.system(size: 12, weight: .semibold))
+
+                    if let gitCommitShort {
+                        Text(gitCommitShort)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .lineLimit(1)
 
                 Spacer(minLength: 0)
 

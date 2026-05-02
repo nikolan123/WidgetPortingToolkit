@@ -154,6 +154,7 @@
 				2334E0A92F9C0DAC0017559C /* Sources */,
 				2334E0AA2F9C0DAC0017559C /* Frameworks */,
 				2334E0AB2F9C0DAC0017559C /* Resources */,
+				2334E0B82F9D1F710017559C /* Add Commit Hash to Template Info.plist */,
 			);
 			buildRules = (
 			);
@@ -195,12 +196,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 23DF79ED2E6DEC0C007D5A01 /* Build configuration list for PBXNativeTarget "Widget Porting Toolkit" */;
 			buildPhases = (
-				23A7F11A2EE6374100274BFF /* Add Commit Hash to Info.plist */,
 				23DF79DD2E6DEC0B007D5A01 /* Sources */,
 				23DF79DE2E6DEC0B007D5A01 /* Frameworks */,
 				23DF79DF2E6DEC0B007D5A01 /* Resources */,
-				23A7F11B2EE63C6A00274BFF /* Remove Commit Hash from Info.plist */,
 				23D4814B2F983B5A008E756A /* Embed Foundation Extensions */,
+				23A7F11A2EE6374100274BFF /* Add Commit Hash to Built Info.plist */,
 			);
 			buildRules = (
 			);
@@ -286,7 +286,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		23A7F11A2EE6374100274BFF /* Add Commit Hash to Info.plist */ = {
+		2334E0B82F9D1F710017559C /* Add Commit Hash to Template Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -296,16 +296,16 @@
 			);
 			inputPaths = (
 			);
-			name = "Add Commit Hash to Info.plist";
+			name = "Add Commit Hash to Template Info.plist";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -e\n\nGIT_COMMIT=$(git rev-parse --short HEAD)\nPLIST=\"$SRCROOT/WidgetPortingAPP/Info.plist\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into SOURCE plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
+			shellScript = "#!/bin/bash\nset -e\n\nGIT_COMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
 		};
-		23A7F11B2EE63C6A00274BFF /* Remove Commit Hash from Info.plist */ = {
+		23A7F11A2EE6374100274BFF /* Add Commit Hash to Built Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -315,14 +315,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Remove Commit Hash from Info.plist";
+			name = "Add Commit Hash to Built Info.plist";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -e\n\nPLIST=\"$SRCROOT/WidgetPortingAPP/Info.plist\"\n\necho \"Deleting GitCommitShort from SOURCE plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Delete :GitCommitShort\" \"$PLIST\" || true\n";
+			shellScript = "#!/bin/bash\nset -e\n\nGIT_COMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -369,6 +369,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -400,6 +401,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
