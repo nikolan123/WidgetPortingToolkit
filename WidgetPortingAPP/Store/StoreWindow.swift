@@ -81,6 +81,13 @@ struct StoreWindow: View {
             }
             .help("Random widget")
             .disabled(viewModel.isLoading || viewModel.isWorking)
+            Button {
+                Task { await viewModel.rollRandomPortableWidget() }
+            } label: {
+                Label("Random Portable", systemImage: "die.face.5")
+            }
+            .help("Close previous random portable widget and open another one")
+            .disabled(viewModel.isLoading || viewModel.isWorking)
             Spacer()
             Button {
                 manager.openStoreAPIURLSetting()

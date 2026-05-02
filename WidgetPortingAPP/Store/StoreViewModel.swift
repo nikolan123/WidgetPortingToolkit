@@ -24,6 +24,7 @@ final class StoreViewModel: ObservableObject {
 
     private let manager: WidgetManager
     private let pageSize = 30
+    private var lastRandomPortableWidgetKey: String?
 
     init(manager: WidgetManager) {
         self.manager = manager
@@ -111,13 +112,15 @@ final class StoreViewModel: ObservableObject {
         await sendToApp(widget, mode: selectedMode)
     }
 
-    func sendToApp(_ widget: StoreWidget, mode: StoreInstallMode) async {
+    @discardableResult
+    func sendToApp(_ widget: StoreWidget, mode: StoreInstallMode) async -> String? {
         guard let client else {
             statusText = "Set a valid Store API URL first."
-            return
+            return nil
         }
         isWorking = true
         statusText = "Downloading \(widget.title)..."
+        var openedWidgetKey: String?
         do {
             let zipURL = try await client.downloadWidget(widget)
             statusText = "Extracting \(widget.title)..."
@@ -134,7 +137,11 @@ final class StoreViewModel: ObservableObject {
                     statusText = "Install cancelled or failed."
                 }
             case .portable:
+                let knownKeys = Set(manager.appInfos.map { "\($0.bundleIdentifier)_\($0.id)" })
                 manager.loadWidget(from: bundleURL, openWindow: manager.autoOpenWidgetOnInstall)
+                if let addedApp = manager.appInfos.first(where: { !knownKeys.contains("\($0.bundleIdentifier)_\($0.id)") }) {
+                    openedWidgetKey = "\(addedApp.bundleIdentifier)_\(addedApp.id)"
+                }
                 statusText = "Opened \(widget.title) as portable."
             case .exporter:
                 manager.openStoreExportWindow(for: bundleURL)
@@ -144,6 +151,26 @@ final class StoreViewModel: ObservableObject {
             statusText = error.localizedDescription
         }
         isWorking = false
+        return openedWidgetKey
+    }
+
+    func rollRandomPortableWidget() async {
+        guard !isWorking else { return }
+
+        if let previousKey = lastRandomPortableWidgetKey,
+           let previousApp = manager.appInfos.first(where: { "\($0.bundleIdentifier)_\($0.id)" == previousKey }) {
+            if let previousWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == previousKey }) {
+                previousWindow.close()
+            }
+            manager.remove(previousApp)
+            lastRandomPortableWidgetKey = nil
+        }
+
+        await selectRandomWidget()
+        guard let widget = selectedWidget else { return }
+
+        let newKey = await sendToApp(widget, mode: .portable)
+        lastRandomPortableWidgetKey = newKey
     }
 
     func downloadSelectedToFolder() async {
