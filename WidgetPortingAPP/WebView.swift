@@ -155,6 +155,10 @@ struct WebView: NSViewRepresentable {
     func updateNSView(_ nsView: WKWebView, context: Context) {
         // No-op; re-open window to apply updated tweaks.
     }
+
+    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+        coordinator.teardown()
+    }
     
     final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         let appInfo: AppInfo
@@ -442,10 +446,19 @@ struct WebView: NSViewRepresentable {
             NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
         }
 
-        deinit {
-            if let monitor = dragEventMonitor {
-                NSEvent.removeMonitor(monitor)
+        func teardown() {
+            endNativeDashboardDrag(callEndHook: false)
+            if let webView {
+                SystemRunner.cancelAll(for: webView)
+                webView.stopLoading()
+                webView.navigationDelegate = nil
+                webView.uiDelegate = nil
             }
+            webView = nil
+        }
+
+        deinit {
+            teardown()
         }
     }
     func loadJSFromBundle(named name: String, inFolder folder: String? = nil) -> String? {

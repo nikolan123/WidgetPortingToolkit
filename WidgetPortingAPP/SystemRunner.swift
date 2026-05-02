@@ -13,6 +13,7 @@ class SystemRunner {
     private struct RunningCommand {
         let process: Process
         let stdinPipe: Pipe
+        let webViewID: ObjectIdentifier
     }
 
     private final class PipeOutputState {
@@ -26,6 +27,19 @@ class SystemRunner {
 
     private static var running: [String: RunningCommand] = [:]
     private static let runningQueue = DispatchQueue(label: "SystemRunner.running")
+
+    private static func canUse(_ webView: WKWebView?) -> Bool {
+        guard let webView else { return false }
+        return webView.navigationDelegate != nil
+    }
+
+    private static func sendOutput(token: String, message: String, didFinish: Bool, isError: Bool, status: Int? = nil, to webView: WKWebView?) {
+        guard canUse(webView) else { return }
+        let finishValue = didFinish ? "true" : "false"
+        let statusValue = status.map(String.init) ?? "false"
+        let js = "window.__handleSystemOutput('\(token)', \(message.debugDescription), \(finishValue), \(didFinish ? statusValue : String(isError)));"
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
 
     // MARK: - Permission
 
@@ -66,13 +80,13 @@ class SystemRunner {
 
     static func runStreaming(command: String, token: String, webView: WKWebView, appInfo: AppInfo, noAsk: Bool) {
         // Defer to next run loop iteration to avoid showing modal during WKScriptMessageHandler callback
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak webView] in
+            guard canUse(webView) else { return }
             guard self.requestPermission(command: command, appInfo: appInfo, noAsk: noAsk) else {
-                let message = "Permission denied"
-                let js = "window.__handleSystemOutput('\(token)', \(message.debugDescription), true, -1);"
-                webView.evaluateJavaScript(js, completionHandler: nil)
+                sendOutput(token: token, message: "Permission denied", didFinish: true, isError: true, status: -1, to: webView)
                 return
             }
+            guard let webView, canUse(webView) else { return }
             self.launchStreaming(command: command, token: token, webView: webView)
         }
     }
@@ -90,8 +104,9 @@ class SystemRunner {
         process.standardInput = inPipe
         let outputState = PipeOutputState(token: token)
 
+        let webViewID = ObjectIdentifier(webView)
         runningQueue.sync {
-            running[token] = RunningCommand(process: process, stdinPipe: inPipe)
+            running[token] = RunningCommand(process: process, stdinPipe: inPipe, webViewID: webViewID)
         }
 
         outPipe.fileHandleForReading.readabilityHandler = { handle in
@@ -100,8 +115,7 @@ class SystemRunner {
                 let data = handle.availableData
                 guard !data.isEmpty, let str = String(data: data, encoding: .utf8) else { return }
                 DispatchQueue.main.async {
-                    let js = "window.__handleSystemOutput('\(token)', \(str.debugDescription), false, false);"
-                    webView.evaluateJavaScript(js, completionHandler: nil)
+                    sendOutput(token: token, message: str, didFinish: false, isError: false, to: webView)
                 }
             }
         }
@@ -112,8 +126,7 @@ class SystemRunner {
                 let data = handle.availableData
                 guard !data.isEmpty, let str = String(data: data, encoding: .utf8) else { return }
                 DispatchQueue.main.async {
-                    let js = "window.__handleSystemOutput('\(token)', \(str.debugDescription), false, true);"
-                    webView.evaluateJavaScript(js, completionHandler: nil)
+                    sendOutput(token: token, message: str, didFinish: false, isError: true, to: webView)
                 }
             }
         }
@@ -131,15 +144,12 @@ class SystemRunner {
 
                 DispatchQueue.main.async {
                     if !remainingOut.isEmpty, let str = String(data: remainingOut, encoding: .utf8) {
-                        let js = "window.__handleSystemOutput('\(token)', \(str.debugDescription), false, false);"
-                        webView.evaluateJavaScript(js, completionHandler: nil)
+                        sendOutput(token: token, message: str, didFinish: false, isError: false, to: webView)
                     }
                     if !remainingErr.isEmpty, let str = String(data: remainingErr, encoding: .utf8) {
-                        let js = "window.__handleSystemOutput('\(token)', \(str.debugDescription), false, true);"
-                        webView.evaluateJavaScript(js, completionHandler: nil)
+                        sendOutput(token: token, message: str, didFinish: false, isError: true, to: webView)
                     }
-                    let js = "window.__handleSystemOutput('\(token)', '', true, \(proc.terminationStatus));"
-                    webView.evaluateJavaScript(js, completionHandler: nil)
+                    sendOutput(token: token, message: "", didFinish: true, isError: false, status: Int(proc.terminationStatus), to: webView)
                 }
             }
         }
@@ -154,9 +164,7 @@ class SystemRunner {
                 running[token] = nil
             }
             DispatchQueue.main.async {
-                let message = "Failed to run command: \(error.localizedDescription)"
-                let js = "window.__handleSystemOutput('\(token)', \(message.debugDescription), true, -1);"
-                webView.evaluateJavaScript(js, completionHandler: nil)
+                sendOutput(token: token, message: "Failed to run command: \(error.localizedDescription)", didFinish: true, isError: true, status: -1, to: webView)
             }
         }
     }
@@ -184,6 +192,18 @@ class SystemRunner {
         entry?.process.terminate()
         runningQueue.sync {
             running[token] = nil
+        }
+    }
+
+    static func cancelAll(for webView: WKWebView) {
+        let webViewID = ObjectIdentifier(webView)
+        let tokens: [String] = runningQueue.sync {
+            running.compactMap { token, entry in
+                entry.webViewID == webViewID ? token : nil
+            }
+        }
+        for token in tokens {
+            cancel(token: token)
         }
     }
 }
