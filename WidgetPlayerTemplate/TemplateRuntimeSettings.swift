@@ -21,7 +21,7 @@ final class TemplateRuntimeSettings: ObservableObject {
     @Published var alwaysOnTop: Bool { didSet { save() } }
     @Published var hideTitlebar: Bool { didSet { save() } }
 
-    private static let defaultsKey = "WidgetPlayerTemplate.RuntimeSettings"
+    private let defaultsKey = "WidgetPlayerTemplate.RuntimeSettings"
     private var isReady = false
 
     private init() {
