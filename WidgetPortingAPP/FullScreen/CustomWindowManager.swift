@@ -146,6 +146,28 @@ struct CustomWindowContainer: View {
                 bringToFront(window)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .closeCustomWindow)) { notification in
+            if let windowInstanceID = notification.windowInstanceID {
+                openWindows.removeAll { $0.id.uuidString == windowInstanceID }
+                if focusedWindowId?.uuidString == windowInstanceID {
+                    focusedWindowId = openWindows.last?.id
+                }
+                return
+            }
+
+            guard let appIdentifier = notification.userInfo?["appIdentifier"] as? String else {
+                return
+            }
+
+            openWindows.removeAll { window in
+                let windowIdentifier = window.appInfo.bundleIdentifier + "_" + window.appInfo.id
+                return windowIdentifier == appIdentifier
+            }
+            if let focused = focusedWindowId,
+               !openWindows.contains(where: { $0.id == focused }) {
+                focusedWindowId = openWindows.last?.id
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .resizeCustomWindow)) { notification in
             guard let userInfo = notification.userInfo,
                 let width = userInfo["width"] as? CGFloat,

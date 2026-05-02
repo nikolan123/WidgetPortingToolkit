@@ -17,6 +17,7 @@ class BorderlessKeyWindow: NSWindow {
 // MARK: - Notification Extension
 extension Notification.Name {
     static let openCustomWindow = Notification.Name("openCustomWindow")
+    static let closeCustomWindow = Notification.Name("closeCustomWindow")
     static let resizeCustomWindow = Notification.Name("resizeCustomWindow")
     static let dashboardCustomWindowDragStart = Notification.Name("dashboardCustomWindowDragStart")
     static let dashboardCustomWindowDragEnd = Notification.Name("dashboardCustomWindowDragEnd")
@@ -131,6 +132,12 @@ class WidgetManager: ObservableObject {
         static let allowMultipleInstances = "allowMultipleInstances"
         static let fullScreenBackgroundStyle = "fullScreenBackgroundStyle"
         static let widgetStoreAPIBaseURL = "widgetStoreAPIBaseURL"
+        static let proxyXMLHttpRequestForNewWidgets = "proxyXMLHttpRequestForNewWidgets"
+        static let suppressAllNetworkIssuePrompts = "NetworkIssuePrompt::SuppressAll"
+
+        static func suppressNetworkIssuePrompt(for bundleIdentifier: String) -> String {
+            "NetworkIssuePrompt::SuppressWidget::\(bundleIdentifier)"
+        }
     }
 
     private let defaults: UserDefaults
@@ -190,6 +197,11 @@ class WidgetManager: ObservableObject {
             defaults.set(widgetStoreAPIBaseURL, forKey: DefaultsKey.widgetStoreAPIBaseURL)
         }
     }
+    @Published var proxyXMLHttpRequestForNewWidgets: Bool {
+        didSet {
+            defaults.set(proxyXMLHttpRequestForNewWidgets, forKey: DefaultsKey.proxyXMLHttpRequestForNewWidgets)
+        }
+    }
     @Published var appInfos: [AppInfo] = []
     @Published var selectedLanguages: [String: String] = [:]
     @Published private(set) var tweaksPerBundle: [String: WidgetTweaks] = [:]
@@ -219,6 +231,7 @@ class WidgetManager: ObservableObject {
             rawValue: defaults.string(forKey: DefaultsKey.fullScreenBackgroundStyle) ?? ""
         ) ?? .grid
         self.widgetStoreAPIBaseURL = defaults.string(forKey: DefaultsKey.widgetStoreAPIBaseURL) ?? "http://192.168.1.13:8000"
+        self.proxyXMLHttpRequestForNewWidgets = Self.readBool(defaults, key: DefaultsKey.proxyXMLHttpRequestForNewWidgets, defaultValue: false)
 
         // make sure as base exists
         do {
@@ -336,7 +349,10 @@ class WidgetManager: ObservableObject {
     func tweaks(for bundleID: String, id: String) -> WidgetTweaks {
         let key = "\(bundleID)_\(id)"
         if let existing = tweaksPerBundle[key] { return existing }
-        let loaded = TweaksStore.load(for: key)
+        var loaded = TweaksStore.load(for: key)
+        if !TweaksStore.hasSavedTweaks(for: key) {
+            loaded.xhrProxyEnabled = proxyXMLHttpRequestForNewWidgets
+        }
         tweaksPerBundle[key] = loaded
         return loaded
     }
@@ -1045,6 +1061,96 @@ class WidgetManager: ObservableObject {
                 "height": height
             ]
         )
+    }
+
+    func showNetworkingIssuePromptIfNeeded(
+        for appInfo: AppInfo,
+        detail: String,
+        sourceWindow: NSWindow?,
+        windowInstanceID: UUID?
+    ) {
+        guard !silentMode else { return }
+        guard !defaults.bool(forKey: DefaultsKey.suppressAllNetworkIssuePrompts) else { return }
+        guard !defaults.bool(forKey: DefaultsKey.suppressNetworkIssuePrompt(for: appInfo.bundleIdentifier)) else { return }
+
+        let currentTweaks = tweaks(for: appInfo.bundleIdentifier, id: appInfo.id)
+        guard !currentTweaks.xhrProxyEnabled else { return }
+
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Networking Issue Detected"
+        alert.informativeText = """
+        \(appInfo.displayName) appears to be blocked by browser networking restrictions.
+
+        Widget Porting Toolkit can try to fix this by enabling Proxy XMLHttpRequest for this widget.
+
+        This tweak is is not a complete XMLHttpRequest implementation and might not work for this widget.
+        """
+        alert.addButton(withTitle: "Enable Proxy XMLHttpRequest and Reopen")
+        alert.addButton(withTitle: "Enable For This and New Widgets")
+        alert.addButton(withTitle: "Don't Ask Again For This Widget")
+        alert.addButton(withTitle: "Don't Ask Again For Any Widget")
+
+        let response = alert.runModal()
+        let fourthButtonReturn = NSApplication.ModalResponse(rawValue: NSApplication.ModalResponse.alertThirdButtonReturn.rawValue + 1)
+        if response == .alertFirstButtonReturn {
+            enableXHRProxyAndReopen(
+                appInfo,
+                closing: sourceWindow,
+                windowInstanceID: windowInstanceID
+            )
+        } else if response == .alertSecondButtonReturn {
+            proxyXMLHttpRequestForNewWidgets = true
+            enableXHRProxyAndReopen(
+                appInfo,
+                closing: sourceWindow,
+                windowInstanceID: windowInstanceID
+            )
+        } else if response == .alertThirdButtonReturn {
+            defaults.set(true, forKey: DefaultsKey.suppressNetworkIssuePrompt(for: appInfo.bundleIdentifier))
+        } else if response == fourthButtonReturn {
+            defaults.set(true, forKey: DefaultsKey.suppressAllNetworkIssuePrompts)
+        }
+    }
+
+    private func enableXHRProxyAndReopen(_ appInfo: AppInfo, closing sourceWindow: NSWindow?, windowInstanceID: UUID?) {
+        var updatedTweaks = tweaks(for: appInfo.bundleIdentifier, id: appInfo.id)
+        updatedTweaks.xhrProxyEnabled = true
+        updateTweaks(for: appInfo.bundleIdentifier, id: appInfo.id, to: updatedTweaks)
+
+        if let sourceWindow, windowInstanceID == nil {
+            sourceWindow.close()
+        } else {
+            let windowIdentifier = appInfo.bundleIdentifier + "_" + appInfo.id
+            openWindows.first(where: { $0.identifier?.rawValue == windowIdentifier })?.close()
+        }
+
+        NotificationCenter.default.post(
+            name: .closeCustomWindow,
+            object: nil,
+            userInfo: customWindowCloseUserInfo(for: appInfo, windowInstanceID: windowInstanceID)
+        )
+
+        DispatchQueue.main.async { [weak self] in
+            self?.openHTMLWindow(appInfo: appInfo)
+        }
+    }
+
+    private func customWindowCloseUserInfo(for appInfo: AppInfo, windowInstanceID: UUID?) -> [String: Any] {
+        var userInfo: [String: Any] = [
+            "appIdentifier": appInfo.bundleIdentifier + "_" + appInfo.id
+        ]
+        if let windowInstanceID {
+            userInfo["windowInstanceID"] = windowInstanceID.uuidString
+        }
+        return userInfo
+    }
+
+    private func shortNetworkIssueDetail(_ detail: String) -> String {
+        let normalized = detail.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 240 else { return normalized }
+        return String(normalized.prefix(237)) + "..."
     }
     
     func clearPreferences(for appInfo: AppInfo) {

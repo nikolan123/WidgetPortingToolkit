@@ -158,6 +158,7 @@ struct WidgetPortingAPPApp: App {
                 Toggle("Launch in Full Screen by Default", isOn: $widgetManager.defaultLaunchFullScreen)
                 Toggle("Borderless Widgets", isOn: $widgetManager.borderlessFullScreenWidgets)
                 Toggle("Allow multiple instances of the same widget", isOn: $widgetManager.allowMultipleInstances)
+                Toggle("Proxy XMLHttpRequest for New Widgets", isOn: $widgetManager.proxyXMLHttpRequestForNewWidgets)
                 Menu("Fullscreen Background") {
                     ForEach(WidgetManager.FullScreenBackgroundStyle.allCases) { style in
                         Toggle(style.title, isOn: fullScreenBackgroundBinding(for: style))

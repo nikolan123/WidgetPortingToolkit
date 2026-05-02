@@ -35,6 +35,18 @@ struct WebView: NSViewRepresentable {
         let prefsData = (try? JSONSerialization.data(withJSONObject: existingPrefs, options: [])) ?? Data()
         let prefsJSONString = String(data: prefsData, encoding: .utf8) ?? "{}"
 
+        if !tweaks.xhrProxyEnabled,
+           let networkIssueDetector = loadJSFromBundle(named: "NetworkIssueDetector") {
+            controller.addUserScript(
+                WKUserScript(
+                    source: networkIssueDetector,
+                    injectionTime: .atDocumentStart,
+                    forMainFrameOnly: false
+                )
+            )
+            controller.add(context.coordinator, name: "networkIssueDetected")
+        }
+
         if tweaks.xhrProxyEnabled {
             if let nativeXHRBootstrap = loadJSFromBundle(named: "XHRBridge") {
                 controller.addUserScript(
@@ -166,6 +178,7 @@ struct WebView: NSViewRepresentable {
         private var dragInitialWindowOrigin: CGPoint?
         private var dragInitialMouseLocation: CGPoint?
         private var dragEventMonitor: Any?
+        private var didReportNetworkIssue = false
 
         // XHR-native management
         private lazy var xhrProxy: NativeXHRProxy? = {
@@ -319,6 +332,21 @@ struct WebView: NSViewRepresentable {
                       let id = dict["id"] as? Int else { return }
                 xhrProxy?.abort(id: id)
 
+            case "networkIssueDetected":
+                guard !didReportNetworkIssue, !tweaks.xhrProxyEnabled else { return }
+                guard let detail = networkIssueDetail(from: message.body) else { return }
+                didReportNetworkIssue = true
+                let sourceWindow = webView?.window
+
+                Task { @MainActor in
+                    WidgetManager.shared.showNetworkingIssuePromptIfNeeded(
+                        for: appInfo,
+                        detail: detail,
+                        sourceWindow: sourceWindow,
+                        windowInstanceID: windowInstanceID
+                    )
+                }
+
             default:
                 break
             }
@@ -442,12 +470,37 @@ struct WebView: NSViewRepresentable {
             NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
         }
 
+        private func networkIssueDetail(from body: Any) -> String? {
+            if let detail = body as? String {
+                return WebView.isLikelyProxyFixableNetworkIssue(detail) ? detail : nil
+            }
+
+            guard let dict = body as? [String: Any] else { return nil }
+            let fields = [
+                dict["message"] as? String,
+                dict["url"] as? String,
+                dict["reason"] as? String
+            ].compactMap { $0 }
+            let detail = fields.joined(separator: " ")
+            return WebView.isLikelyProxyFixableNetworkIssue(detail) ? detail : nil
+        }
+
         deinit {
             if let monitor = dragEventMonitor {
                 NSEvent.removeMonitor(monitor)
             }
         }
     }
+
+    private static func isLikelyProxyFixableNetworkIssue(_ detail: String) -> Bool {
+        let normalized = detail.lowercased()
+        return normalized.contains("xmlhttprequest cannot load")
+            || normalized.contains("cross-origin redirection")
+            || normalized.contains("cross-origin resource sharing")
+            || normalized.contains("access control checks")
+            || normalized.contains("origin null is not allowed by access-control-allow-origin")
+    }
+
     func loadJSFromBundle(named name: String, inFolder folder: String? = nil) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: "js", subdirectory: folder),
               let data = try? Data(contentsOf: url),

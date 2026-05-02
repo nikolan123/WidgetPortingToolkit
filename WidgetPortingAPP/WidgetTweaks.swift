@@ -51,6 +51,10 @@ enum TweaksStore {
         catch { return .defaults() }
     }
 
+    static func hasSavedTweaks(for bundleID: String) -> Bool {
+        UserDefaults.standard.data(forKey: key(for: bundleID)) != nil
+    }
+
     static func save(_ tweaks: WidgetTweaks, for bundleID: String) {
         let k = key(for: bundleID)
         if let data = try? JSONEncoder().encode(tweaks) {
