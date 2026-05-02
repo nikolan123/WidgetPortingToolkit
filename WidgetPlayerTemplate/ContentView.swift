@@ -108,6 +108,9 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     private var runningProcesses: [String: Process] = [:]
     private var outputBuffers: [String: String] = [:]
     private var cancellables = Set<AnyCancellable>()
+    private var dragInitialWindowOrigin: CGPoint?
+    private var dragInitialMouseLocation: CGPoint?
+    private var dragEventMonitor: Any?
 
     private(set) var webView: WKWebView!
 
@@ -123,6 +126,10 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        endNativeDashboardDrag(callEndHook: false)
+    }
+
     override func loadView() {
         let webConfig = WKWebViewConfiguration()
         let controller = webConfig.userContentController
@@ -132,7 +139,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         injectDashboardScripts(into: controller)
         injectCSSTweaks(into: controller)
 
-        ["openURL", "openApplication", "setPreferenceForKey", "prepareForTransition", "performTransition", "resizeTo", "systemCommand"]
+        ["openURL", "openApplication", "setPreferenceForKey", "prepareForTransition", "performTransition", "resizeTo", "systemCommand", "dashboardDragStart", "dashboardDragEnd"]
             .forEach { controller.add(self, name: $0) }
 
         let webView = WKWebView(frame: .zero, configuration: webConfig)
@@ -168,6 +175,14 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     }
 
     private func injectDashboardScripts(into controller: WKUserContentController) {
+        controller.addUserScript(
+            WKUserScript(
+                source: "window.__widgetPortingDashboardControlRegionsEnabled = \(runtimeSettings.emulateDashboardControlRegions ? "true" : "false");",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+
         guard runtimeSettings.recreateDashboardAPI else { return }
 
         let prefs = UserDefaults.standard.dictionary(forKey: prefsNamespace) ?? [:]
@@ -294,6 +309,14 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
                 }
             }
 
+        case "dashboardDragStart":
+            guard runtimeSettings.emulateDashboardControlRegions,
+                  let window = webView.window else { return }
+            beginNativeDashboardDrag(window: window)
+
+        case "dashboardDragEnd":
+            endNativeDashboardDrag(callEndHook: true)
+
         case "systemCommand":
             guard let dict = message.body as? [String: Any],
                   let action = dict["action"] as? String,
@@ -335,6 +358,70 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         webView.layer?.add(transition, forKey: "widgetFlip")
         webView.wantsLayer = true
         webView.evaluateJavaScript("if (typeof window.onshow === 'function') { window.onshow(); }", completionHandler: nil)
+    }
+
+    private func beginNativeDashboardDrag(window: NSWindow) {
+        dragInitialWindowOrigin = window.frame.origin
+        dragInitialMouseLocation = NSEvent.mouseLocation
+        callDashboardDragHook("onstartdrag")
+
+        if dragEventMonitor == nil {
+            dragEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
+                self?.handleNativeDashboardDragEvent(event)
+                return event
+            }
+        }
+    }
+
+    private func handleNativeDashboardDragEvent(_ event: NSEvent) {
+        guard let initialWindowOrigin = dragInitialWindowOrigin,
+              let initialMouseLocation = dragInitialMouseLocation,
+              let window = webView.window else {
+            endNativeDashboardDrag(callEndHook: false)
+            return
+        }
+
+        switch event.type {
+        case .leftMouseDragged:
+            let mouseLocation = NSEvent.mouseLocation
+            window.setFrameOrigin(CGPoint(
+                x: initialWindowOrigin.x + mouseLocation.x - initialMouseLocation.x,
+                y: initialWindowOrigin.y + mouseLocation.y - initialMouseLocation.y
+            ))
+        case .leftMouseUp:
+            endNativeDashboardDrag(callEndHook: true)
+        default:
+            break
+        }
+    }
+
+    private func endNativeDashboardDrag(callEndHook: Bool) {
+        guard dragInitialWindowOrigin != nil || dragEventMonitor != nil else { return }
+
+        dragInitialWindowOrigin = nil
+        dragInitialMouseLocation = nil
+
+        if let monitor = dragEventMonitor {
+            NSEvent.removeMonitor(monitor)
+            dragEventMonitor = nil
+        }
+
+        if callEndHook {
+            callDashboardDragHook("onenddrag")
+        }
+    }
+
+    private func callDashboardDragHook(_ name: String) {
+        webView.evaluateJavaScript("""
+        (function() {
+            try {
+                var widgetHook = window.widget && window.widget.\(name);
+                var windowHook = window.\(name);
+                if (typeof widgetHook === 'function') widgetHook();
+                if (typeof windowHook === 'function' && windowHook !== widgetHook) windowHook();
+            } catch (e) {}
+        })();
+        """, completionHandler: nil)
     }
 
     private func openApplication(withBundleIdentifier bundleIdentifier: String) {

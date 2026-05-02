@@ -210,7 +210,12 @@
         } catch (e) {}
     }
 
+    function dashboardControlRegionsEnabled() {
+        return window.__widgetPortingDashboardControlRegionsEnabled !== false;
+    }
+
     document.addEventListener("mousedown", function (event) {
+        if (!dashboardControlRegionsEnabled()) return;
         if (event.button !== 0) return;
         if (isInteractiveTarget(event.target)) return;
         if (isInControlRegion(event.clientX, event.clientY)) return;
@@ -223,6 +228,7 @@
     }, true);
 
     document.addEventListener("mousemove", function (event) {
+        if (!dashboardControlRegionsEnabled()) return;
         if (!pendingDrag || (event.buttons & 1) !== 1) return;
 
         var dx = event.clientX - pendingDrag.startX;
@@ -239,6 +245,7 @@
     }, true);
 
     document.addEventListener("mouseup", function (event) {
+        if (!dashboardControlRegionsEnabled()) return;
         if (activeDrag) {
             postDragMessage("dashboardDragEnd", {});
             event.preventDefault();

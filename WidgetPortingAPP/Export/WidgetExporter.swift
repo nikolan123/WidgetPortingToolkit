@@ -124,7 +124,7 @@ enum WidgetExporter {
         injectRuntimeScriptReferences(
             rootFolder: exportFolder,
             in: exportFolder,
-            scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js"]
+            scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js", "DashboardDragRegions.js"]
         )
 
         step("Preparing localizedStrings fallback…")
@@ -218,7 +218,7 @@ enum WidgetExporter {
             "",
             "Export Formats Available: zip, webarchive, python-runner, macos-app",
             "Support Directory Source: \(supportDirectoryPath)",
-            "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js",
+            "Injected Scripts: DashboardAPI.js, WidgetShims.js, SystemInject.js, ExportRuntime.js, DashboardDragRegions.js",
             format == .pythonRunner ? "Python Requirement: PySide6 must be installed (pip install PySide6 or uv sync)." : "",
             "",
             "Logs:",
@@ -477,19 +477,25 @@ enum WidgetExporter {
         guard let dashboard = loadBundledJS(named: "DashboardAPI"),
               let widgetShims = loadBundledJS(named: "WidgetShims"),
               let systemInject = loadBundledJS(named: "SystemInject"),
-              let exportRuntime = loadBundledJS(named: "ExportRuntime") else {
+              let exportRuntime = loadBundledJS(named: "ExportRuntime"),
+              let dashboardDragRegions = loadBundledJS(named: "DashboardDragRegions") else {
             throw WidgetExportError.runtimeGenerationFailed
         }
 
         let dashboardPatched = dashboard
             .replacingOccurrences(of: "__WIDGET_PREFS__", with: "{}")
             .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: "\(bundleID)_widget_export")
+        let dashboardDragRegionsPatched = dashboardDragRegions.replacingOccurrences(
+            of: "__DASHBOARD_REGION_CSS__",
+            with: dashboardRegionCSSJSONString(for: folder)
+        )
 
         let outputs: [(String, String)] = [
             ("DashboardAPI.js", dashboardPatched),
             ("WidgetShims.js", widgetShims),
             ("SystemInject.js", systemInject),
-            ("ExportRuntime.js", exportRuntime)
+            ("ExportRuntime.js", exportRuntime),
+            ("DashboardDragRegions.js", dashboardDragRegionsPatched)
         ]
 
         do {
@@ -517,6 +523,27 @@ enum WidgetExporter {
             return source
         }
         return nil
+    }
+
+    private static func dashboardRegionCSSJSONString(for folder: URL) -> String {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: folder, includingPropertiesForKeys: nil) else { return "[]" }
+
+        var stylesheetSources: [String] = []
+        for case let fileURL as URL in enumerator where fileURL.pathExtension.caseInsensitiveCompare("css") == .orderedSame {
+            guard let data = try? Data(contentsOf: fileURL) else { continue }
+            if let css = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .isoLatin1),
+               css.contains("-apple-dashboard-region") {
+                stylesheetSources.append(css)
+            }
+        }
+
+        guard let data = try? JSONSerialization.data(withJSONObject: stylesheetSources, options: []),
+              let json = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+
+        return json
     }
 
     private static func isoTimestamp() -> String {

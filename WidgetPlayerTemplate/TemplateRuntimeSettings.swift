@@ -12,6 +12,7 @@ final class TemplateRuntimeSettings: ObservableObject {
     static let shared = TemplateRuntimeSettings()
 
     @Published var recreateDashboardAPI: Bool = true { didSet { saveIfReady() } }
+    @Published var emulateDashboardControlRegions: Bool = true { didSet { saveIfReady() } }
     @Published var allowSystemCommands: Bool = true { didSet { saveIfReady() } }
     @Published var noAskSystemCommands: Bool = false { didSet { saveIfReady() } }
     @Published var injectCSS: Bool = true { didSet { saveIfReady() } }
@@ -26,6 +27,7 @@ final class TemplateRuntimeSettings: ObservableObject {
 
     private struct PersistedSettings: Codable {
         var recreateDashboardAPI: Bool
+        var emulateDashboardControlRegions: Bool
         var allowSystemCommands: Bool
         var noAskSystemCommands: Bool
         var injectCSS: Bool
@@ -33,6 +35,41 @@ final class TemplateRuntimeSettings: ObservableObject {
         var useNativeShadow: Bool
         var alwaysOnTop: Bool
         var hideTitlebar: Bool
+
+        init(
+            recreateDashboardAPI: Bool,
+            emulateDashboardControlRegions: Bool,
+            allowSystemCommands: Bool,
+            noAskSystemCommands: Bool,
+            injectCSS: Bool,
+            transparentBackground: Bool,
+            useNativeShadow: Bool,
+            alwaysOnTop: Bool,
+            hideTitlebar: Bool
+        ) {
+            self.recreateDashboardAPI = recreateDashboardAPI
+            self.emulateDashboardControlRegions = emulateDashboardControlRegions
+            self.allowSystemCommands = allowSystemCommands
+            self.noAskSystemCommands = noAskSystemCommands
+            self.injectCSS = injectCSS
+            self.transparentBackground = transparentBackground
+            self.useNativeShadow = useNativeShadow
+            self.alwaysOnTop = alwaysOnTop
+            self.hideTitlebar = hideTitlebar
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            recreateDashboardAPI = try container.decodeIfPresent(Bool.self, forKey: .recreateDashboardAPI) ?? true
+            emulateDashboardControlRegions = try container.decodeIfPresent(Bool.self, forKey: .emulateDashboardControlRegions) ?? true
+            allowSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .allowSystemCommands) ?? true
+            noAskSystemCommands = try container.decodeIfPresent(Bool.self, forKey: .noAskSystemCommands) ?? false
+            injectCSS = try container.decodeIfPresent(Bool.self, forKey: .injectCSS) ?? true
+            transparentBackground = try container.decodeIfPresent(Bool.self, forKey: .transparentBackground) ?? true
+            useNativeShadow = try container.decodeIfPresent(Bool.self, forKey: .useNativeShadow) ?? TemplateRuntimeSettings.defaultUseNativeShadow()
+            alwaysOnTop = try container.decodeIfPresent(Bool.self, forKey: .alwaysOnTop) ?? false
+            hideTitlebar = try container.decodeIfPresent(Bool.self, forKey: .hideTitlebar) ?? false
+        }
     }
 
     private init(fileManager: FileManager = .default) {
@@ -40,6 +77,7 @@ final class TemplateRuntimeSettings: ObservableObject {
 
         let loaded = loadPersistedSettings() ?? migrateLegacySettings() ?? PersistedSettings(
             recreateDashboardAPI: true,
+            emulateDashboardControlRegions: true,
             allowSystemCommands: true,
             noAskSystemCommands: false,
             injectCSS: true,
@@ -50,6 +88,7 @@ final class TemplateRuntimeSettings: ObservableObject {
         )
 
         recreateDashboardAPI = loaded.recreateDashboardAPI
+        emulateDashboardControlRegions = loaded.emulateDashboardControlRegions
         allowSystemCommands = loaded.allowSystemCommands
         noAskSystemCommands = loaded.noAskSystemCommands
         injectCSS = loaded.injectCSS
@@ -91,6 +130,7 @@ final class TemplateRuntimeSettings: ObservableObject {
 
         let migrated = PersistedSettings(
             recreateDashboardAPI: bool("recreateDashboardAPI", default: true),
+            emulateDashboardControlRegions: bool("emulateDashboardControlRegions", default: true),
             allowSystemCommands: bool("allowSystemCommands", default: true),
             noAskSystemCommands: bool("noAskSystemCommands", default: false),
             injectCSS: bool("injectCSS", default: true),
@@ -112,6 +152,7 @@ final class TemplateRuntimeSettings: ObservableObject {
     private func save() {
         let settings = PersistedSettings(
             recreateDashboardAPI: recreateDashboardAPI,
+            emulateDashboardControlRegions: emulateDashboardControlRegions,
             allowSystemCommands: allowSystemCommands,
             noAskSystemCommands: noAskSystemCommands,
             injectCSS: injectCSS,
