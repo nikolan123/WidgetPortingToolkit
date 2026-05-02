@@ -8,7 +8,6 @@
 import Foundation
 import Combine
 
-@MainActor
 final class TemplateRuntimeSettings: ObservableObject {
     static let shared = TemplateRuntimeSettings()
 
