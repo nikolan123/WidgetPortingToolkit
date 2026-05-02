@@ -130,6 +130,7 @@ class WidgetManager: ObservableObject {
         static let borderlessFullScreenWidgets = "borderlessFullScreenWidgets"
         static let allowMultipleInstances = "allowMultipleInstances"
         static let fullScreenBackgroundStyle = "fullScreenBackgroundStyle"
+        static let widgetStoreAPIBaseURL = "widgetStoreAPIBaseURL"
     }
 
     private let defaults: UserDefaults
@@ -184,6 +185,11 @@ class WidgetManager: ObservableObject {
             defaults.set(fullScreenBackgroundStyle.rawValue, forKey: DefaultsKey.fullScreenBackgroundStyle)
         }
     }
+    @Published var widgetStoreAPIBaseURL: String {
+        didSet {
+            defaults.set(widgetStoreAPIBaseURL, forKey: DefaultsKey.widgetStoreAPIBaseURL)
+        }
+    }
     @Published var appInfos: [AppInfo] = []
     @Published var selectedLanguages: [String: String] = [:]
     @Published private(set) var tweaksPerBundle: [String: WidgetTweaks] = [:]
@@ -212,6 +218,7 @@ class WidgetManager: ObservableObject {
         self.fullScreenBackgroundStyle = FullScreenBackgroundStyle(
             rawValue: defaults.string(forKey: DefaultsKey.fullScreenBackgroundStyle) ?? ""
         ) ?? .grid
+        self.widgetStoreAPIBaseURL = defaults.string(forKey: DefaultsKey.widgetStoreAPIBaseURL) ?? "http://192.168.1.13:8000"
 
         // make sure as base exists
         do {
@@ -485,6 +492,27 @@ class WidgetManager: ObservableObject {
         window.styleMask = [.titled, .closable, .miniaturizable]
         window.makeKeyAndOrderFront(nil)
         window.level = .floating
+    }
+
+    func openStoreAPIURLSetting() {
+        let popupView = StoreAPIURLPopup()
+            .environmentObject(self)
+        let hosting = NSHostingController(rootView: popupView)
+
+        let window = NSWindow(contentViewController: hosting)
+        window.title = "Widget Store API"
+        window.center()
+        window.setContentSize(NSSize(width: 420, height: 120))
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.makeKeyAndOrderFront(nil)
+        window.level = .floating
+    }
+
+    func normalizedWidgetStoreAPIBaseURL() -> URL? {
+        let trimmed = widgetStoreAPIBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let candidate = trimmed.contains("://") ? trimmed : "http://\(trimmed)"
+        return URL(string: candidate.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
     }
 
     func handleOpenedWidgetURL(_ folderURL: URL) {
