@@ -51,7 +51,7 @@ enum WidgetAppExportBuilder {
             iconConfigured: configureAppIcon(from: processedWidgetFolder, resourcesURL: resourcesURL, workDirectory: workDirectory)
         )
 
-        try removeQuarantineAttribute(from: outputAppURL)
+        try removeExtendedAttributes(from: outputAppURL)
         try adHocSignAppBundle(at: outputAppURL)
     }
 
@@ -209,10 +209,10 @@ enum WidgetAppExportBuilder {
         return process.terminationStatus == 0
     }
 
-    private static func removeQuarantineAttribute(from appURL: URL) throws {
+    private static func removeExtendedAttributes(from appURL: URL) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/xattr")
-        process.arguments = ["-r", "-d", "com.apple.quarantine", appURL.path]
+        process.arguments = ["-cr", appURL.path]
         let stderr = Pipe()
         process.standardError = stderr
 
@@ -223,17 +223,11 @@ enum WidgetAppExportBuilder {
             throw WidgetExportError.fileOperationFailed("Failed to start xattr: \(error.localizedDescription)")
         }
 
-        if process.terminationStatus == 0 {
-            return
+        guard process.terminationStatus == 0 else {
+            let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
+            let errorText = String(data: errorData, encoding: .utf8) ?? "unknown error"
+            throw WidgetExportError.fileOperationFailed("xattr failed with status \(process.terminationStatus): \(errorText)")
         }
-
-        let errorData = stderr.fileHandleForReading.readDataToEndOfFile()
-        let errorText = String(data: errorData, encoding: .utf8) ?? ""
-        if errorText.contains("No such xattr") {
-            return
-        }
-
-        throw WidgetExportError.fileOperationFailed("xattr failed with status \(process.terminationStatus): \(errorText)")
     }
 
     private static func adHocSignAppBundle(at appURL: URL) throws {
