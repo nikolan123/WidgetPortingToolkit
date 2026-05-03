@@ -115,6 +115,16 @@ struct WidgetPortingAPPApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var widgetManager = WidgetManager.shared
 
+    init() {
+        let args = ProcessInfo.processInfo.arguments
+        
+        // If the --export flag is present, run CLI logic and exit immediately
+        if args.contains("--export") {
+            CLIRunner.run(args: Array(args.dropFirst()))
+            exit(0)
+        }
+    }
+
     var body: some Scene {
         Settings {
             EmptyView()
