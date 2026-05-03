@@ -194,6 +194,11 @@ struct WidgetExportWindow: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity)
+                .help(model.statusText)
+                .onTapGesture {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(model.statusText, forType: .string)
+                }
 
             if let output = model.lastOutputPath {
                 Text(output)
@@ -202,6 +207,11 @@ struct WidgetExportWindow: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity)
+                    .help(output)
+                    .onTapGesture {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(output, forType: .string)
+                    }
             }
         }
         .padding(22)

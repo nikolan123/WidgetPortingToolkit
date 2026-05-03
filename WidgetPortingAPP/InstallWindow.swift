@@ -259,6 +259,11 @@ struct InstallExportSheet: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .frame(maxWidth: .infinity)
+                .help(statusText)
+                .onTapGesture {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(statusText, forType: .string)
+                }
 
             if let lastOutputPath {
                 Text(lastOutputPath)
@@ -267,6 +272,11 @@ struct InstallExportSheet: View {
                     .lineLimit(2)
                     .truncationMode(.middle)
                     .frame(maxWidth: .infinity)
+                    .help(lastOutputPath)
+                    .onTapGesture {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(lastOutputPath, forType: .string)
+                    }
             }
 
             HStack {
