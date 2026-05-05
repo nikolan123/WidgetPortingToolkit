@@ -137,7 +137,6 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
 
         // Mirror main target bridge behavior.
         injectDashboardScripts(into: controller)
-        injectCSSTweaks(into: controller)
 
         ["openURL", "openApplication", "setPreferenceForKey", "prepareForTransition", "performTransition", "resizeTo", "systemCommand", "dashboardDragStart", "dashboardDragEnd"]
             .forEach { controller.add(self, name: $0) }
@@ -181,7 +180,7 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         let widgetIdentifier = appBundleIdentifier
         let regionsEnabled = runtimeSettings.emulateDashboardControlRegions ? "true" : "false"
 
-        // Exporter already hardcodes DashboardAPI.js, WidgetShims.js, and SystemInject.js into the HTML.
+        // Exporter already hardcodes runtime scripts into the HTML.
         // We only need to inject the dynamic configuration variables before those scripts run.
         let configScript = """
         window.__widgetPortingDashboardControlRegionsEnabled = \(regionsEnabled);
@@ -198,57 +197,9 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
         )
     }
 
-    private func injectCSSTweaks(into controller: WKUserContentController) {
-        guard runtimeSettings.injectCSS else { return }
-
-        if let injectCSS = loadBundledJS(named: "InjectCSS") {
-            controller.addUserScript(
-                WKUserScript(source: injectCSS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-            )
-            return
-        }
-
-        // Fallback if InjectCSS.js is not in this target's resources.
-        // TODO: check if ts is needed
-        let fallback = """
-        (function(){
-          var s = document.createElement('style');
-          s.type = 'text/css';
-          s.appendChild(document.createTextNode(`
-        * { -webkit-user-drag: none; -webkit-user-select: none; }
-        html, body {
-          overflow: hidden !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          width: 100% !important;
-          height: 100% !important;
-        }
-          `));
-          (document.head || document.documentElement).appendChild(s);
-        })();
-        """
-        controller.addUserScript(
-            WKUserScript(source: fallback, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        )
-    }
-
     private func applyWebViewBackground(for webView: WKWebView) {
         webView.setValue(runtimeSettings.transparentBackground ? false : true, forKey: "drawsBackground")
         view.layer?.backgroundColor = runtimeSettings.transparentBackground ? NSColor.clear.cgColor : NSColor.windowBackgroundColor.cgColor
-    }
-
-    private func loadBundledJS(named name: String) -> String? {
-        let candidates: [URL?] = [
-            Bundle.main.url(forResource: name, withExtension: "js", subdirectory: "js"),
-            Bundle.main.url(forResource: name, withExtension: "js")
-        ]
-        for candidate in candidates {
-            guard let url = candidate,
-                  let data = try? Data(contentsOf: url),
-                  let source = String(data: data, encoding: .utf8) else { continue }
-            return source
-        }
-        return nil
     }
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

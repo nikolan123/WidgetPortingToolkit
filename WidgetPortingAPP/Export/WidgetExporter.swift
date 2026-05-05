@@ -124,7 +124,7 @@ enum WidgetExporter {
         injectRuntimeScriptReferences(
             rootFolder: exportFolder,
             in: exportFolder,
-            scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js", "DashboardDragRegions.js"]
+            scriptFileNames: ["DashboardAPI.js", "WidgetShims.js", "SystemInject.js", "ExportRuntime.js", "DashboardDragRegions.js", "InjectCSS.js"]
         )
 
         step("Preparing localizedStrings fallback…")
@@ -478,7 +478,8 @@ enum WidgetExporter {
               let widgetShims = loadBundledJS(named: "WidgetShims"),
               let systemInject = loadBundledJS(named: "SystemInject"),
               let exportRuntime = loadBundledJS(named: "ExportRuntime"),
-              let dashboardDragRegions = loadBundledJS(named: "DashboardDragRegions") else {
+              let dashboardDragRegions = loadBundledJS(named: "DashboardDragRegions"),
+              let injectCSS = loadBundledJS(named: "InjectCSS") else {
             throw WidgetExportError.runtimeGenerationFailed
         }
 
@@ -495,7 +496,8 @@ enum WidgetExporter {
             ("WidgetShims.js", widgetShims),
             ("SystemInject.js", systemInject),
             ("ExportRuntime.js", exportRuntime),
-            ("DashboardDragRegions.js", dashboardDragRegionsPatched)
+            ("DashboardDragRegions.js", dashboardDragRegionsPatched),
+            ("InjectCSS.js", injectCSS)
         ]
 
         do {
