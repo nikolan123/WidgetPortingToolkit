@@ -339,12 +339,14 @@ final class WidgetPlayerViewController: NSViewController, WKScriptMessageHandler
     }
 
     private func performFlip(direction: String) {
+        webView.wantsLayer = true
         let transition = CATransition()
         transition.type = .init(rawValue: "oglFlip")
-        transition.subtype = direction.lowercased().contains("back") ? .fromLeft : .fromRight
-        transition.duration = 0.45
+        let normalized = direction.lowercased()
+        transition.subtype = (normalized == "toback") ? .fromRight : .fromLeft
+        transition.duration = 0.6
+        transition.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         webView.layer?.add(transition, forKey: "widgetFlip")
-        webView.wantsLayer = true
         webView.evaluateJavaScript("if (typeof window.onshow === 'function') { window.onshow(); }", completionHandler: nil)
     }
 
