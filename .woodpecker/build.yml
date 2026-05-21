@@ -7,6 +7,7 @@ when:
 
 labels:
   backend: local
+  platform: darwin/amd64
 
 steps:
   build-macos:
