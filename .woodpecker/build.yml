@@ -44,12 +44,14 @@ steps:
           BUILD_DIR=build \
           build
       - |
-        cd build/Release
-        mkdir -p "Widget Porting Toolkit.app/Contents/Resources/Templates"
-        rm -rf "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
-        ditto "WidgetPlayerTemplate.app" "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
-        xattr -cr "Widget Porting Toolkit.app"
-        codesign --force --deep --sign - "Widget Porting Toolkit.app"
+        (
+          cd build/Release
+          mkdir -p "Widget Porting Toolkit.app/Contents/Resources/Templates"
+          rm -rf "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+          ditto "WidgetPlayerTemplate.app" "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+          xattr -cr "Widget Porting Toolkit.app"
+          codesign --force --deep --sign - "Widget Porting Toolkit.app"
+        )
       - mkdir -p artifacts
       - |
         create-dmg \
