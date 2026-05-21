@@ -1,0 +1,130 @@
+when:
+  - event: push
+    branch:
+      - main
+      - master
+  - event: manual
+
+labels:
+  backend: local
+
+steps:
+  build-macos:
+    image: bash
+    commands:
+      - date +%s > .tekljer_action_started_at
+      - |
+        if [ -z "$(git rev-list -n 1 HEAD --since='24 hours ago')" ]; then
+          echo "No commits in the last 24 hours, skipping build."
+          touch .tekljer_skip_upload
+          exit 0
+        else
+          echo "Commits detected, proceeding with build."
+        fi
+      - xcodebuild -version
+      - command -v create-dmg
+      - |
+        xcodebuild \
+          -project "WidgetPortingAPP.xcodeproj" \
+          -scheme "WidgetPlayerTemplate" \
+          -configuration Release \
+          -destination "platform=macOS" \
+          ARCHS="arm64 x86_64" \
+          ONLY_ACTIVE_ARCH=NO \
+          BUILD_DIR=build \
+          clean build
+      - |
+        xcodebuild \
+          -project "WidgetPortingAPP.xcodeproj" \
+          -scheme "Widget Porting Toolkit" \
+          -configuration Release \
+          -destination "platform=macOS" \
+          ARCHS="arm64 x86_64" \
+          ONLY_ACTIVE_ARCH=NO \
+          BUILD_DIR=build \
+          build
+      - |
+        cd build/Release
+        mkdir -p "Widget Porting Toolkit.app/Contents/Resources/Templates"
+        rm -rf "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+        ditto "WidgetPlayerTemplate.app" "Widget Porting Toolkit.app/Contents/Resources/Templates/WidgetPlayerTemplate.app"
+        xattr -cr "Widget Porting Toolkit.app"
+        codesign --force --deep --sign - "Widget Porting Toolkit.app"
+      - mkdir -p artifacts
+      - |
+        create-dmg \
+          --volname "Widget Porting Toolkit" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 128 \
+          --icon "Widget Porting Toolkit.app" 150 200 \
+          --hide-extension "Widget Porting Toolkit.app" \
+          --app-drop-link 450 200 \
+          --background ".github/assets/dmg-background.png" \
+          "artifacts/Widget Porting Toolkit.dmg" \
+          "build/Release/Widget Porting Toolkit.app"
+      - |
+        (
+          cd build/Release
+          zip -r "../../artifacts/Widget Porting Toolkit.zip" "Widget Porting Toolkit.app"
+        )
+      - |
+        DMG_HASH="$(shasum -a 256 "artifacts/Widget Porting Toolkit.dmg" | awk '{print $1}')"
+        ZIP_HASH="$(shasum -a 256 "artifacts/Widget Porting Toolkit.zip" | awk '{print $1}')"
+        {
+          echo "DMG_SHA256=$DMG_HASH"
+          echo "ZIP_SHA256=$ZIP_HASH"
+          echo "COMMIT=$(git rev-parse --short HEAD)"
+          echo "BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        } > artifacts/build-info.txt
+      - ls -lah artifacts
+
+  post-to-main-pc:
+    image: bash
+    depends_on:
+      - build-macos
+    environment:
+      UPLOAD_TOKEN:
+        from_secret: upload_token
+    commands:
+      - pwd
+      - find . -maxdepth 3 -type f
+      - |
+        if [ -f .tekljer_skip_upload ]; then
+          echo "Build was skipped; no upload needed."
+          exit 0
+        fi
+      - ls -lah artifacts
+      - |
+        START_TS="$(cat .tekljer_action_started_at 2>/dev/null || true)"
+        if ! echo "$START_TS" | grep -Eq '^[0-9]+$'; then
+          START_TS="$(date +%s)"
+        fi
+
+        FOUND=0
+
+        for f in artifacts/*; do
+          if [ -f "$f" ]; then
+            FOUND=1
+            echo "Uploading $f"
+            NOW_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            CURRENT_TS="$(date +%s)"
+            ELAPSED_SECONDS="$((CURRENT_TS - START_TS))"
+
+            curl -f -X POST "http://192.168.1.20:7777/upload" \
+              -H "X-TEKLJER-Token: $UPLOAD_TOKEN" \
+              -F "repo=nikolan123/WidgetPortingToolkit" \
+              -F "build=$CI_COMMIT_SHA" \
+              -F "commit=$CI_COMMIT_SHA" \
+              -F "branch=$CI_COMMIT_BRANCH" \
+              -F "pipeline=$CI_PIPELINE_NUMBER" \
+              -F "created_at=$NOW_UTC" \
+              -F "elapsed_seconds=$ELAPSED_SECONDS" \
+              -F "files=@$f"
+          fi
+        done
+
+        if [ "$FOUND" = "0" ]; then
+          echo "No files found in artifacts/"
+          exit 1
+        fi
