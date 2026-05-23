@@ -33,6 +33,15 @@
 
 ## Getting Started
 
+1. Download the latest DMG from the button above or from the [releases page](https://github.com/nikolan123/WidgetPortingToolkit/releases)
+2. Open the DMG and move Widget Porting Toolkit to your Applications folder
+3. Launch the app
+4. Drag `.wdgt` bundles into the app
+
+## Building From Source
+
+Building from source is only needed if you want to modify the app or contribute code.
+
 ```bash
 git clone https://github.com/nikolan123/WidgetPortingToolkit.git
 cd WidgetPortingToolkit
@@ -41,7 +50,7 @@ open WidgetPortingAPP.xcodeproj
 
 1. Build and run in Xcode
 2. Use the menu to install the Support Directory
-3. Drag .wdgt bundles into the app
+3. Drag `.wdgt` bundles into the app
 
 ## Resources
 
