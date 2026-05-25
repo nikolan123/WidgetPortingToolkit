@@ -91,7 +91,6 @@ steps:
         from_secret: upload_token
       TEKLJER_SERVER: http://192.168.1.20:7777
       TEKLJER_JOB: macos-release
-      CI_REPO: nikolan123/WidgetPortingToolkit
     commands:
       - command -v curl
       - command -v jq
