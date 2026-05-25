@@ -89,45 +89,10 @@ steps:
     environment:
       UPLOAD_TOKEN:
         from_secret: upload_token
+      TEKLJER_SERVER: http://192.168.1.20:7777
+      TEKLJER_JOB: macos-release
+      CI_REPO: nikolan123/WidgetPortingToolkit
     commands:
-      - pwd
-      - find . -maxdepth 3 -type f
-      - |
-        if [ -f .tekljer_skip_upload ]; then
-          echo "Build was skipped; no upload needed."
-          exit 0
-        fi
-      - ls -lah artifacts
-      - |
-        START_TS="$(cat .tekljer_action_started_at 2>/dev/null || true)"
-        if ! echo "$START_TS" | grep -Eq '^[0-9]+$'; then
-          START_TS="$(date +%s)"
-        fi
-
-        FOUND=0
-
-        for f in artifacts/*; do
-          if [ -f "$f" ]; then
-            FOUND=1
-            echo "Uploading $f"
-            NOW_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-            CURRENT_TS="$(date +%s)"
-            ELAPSED_SECONDS="$((CURRENT_TS - START_TS))"
-
-            curl -f -X POST "http://192.168.1.20:7777/upload" \
-              -H "X-TEKLJER-Token: $UPLOAD_TOKEN" \
-              -F "repo=nikolan123/WidgetPortingToolkit" \
-              -F "build=$CI_COMMIT_SHA" \
-              -F "commit=$CI_COMMIT_SHA" \
-              -F "branch=$CI_COMMIT_BRANCH" \
-              -F "pipeline=$CI_PIPELINE_NUMBER" \
-              -F "created_at=$NOW_UTC" \
-              -F "elapsed_seconds=$ELAPSED_SECONDS" \
-              -F "files=@$f"
-          fi
-        done
-
-        if [ "$FOUND" = "0" ]; then
-          echo "No files found in artifacts/"
-          exit 1
-        fi
+      - command -v curl
+      - command -v jq
+      - curl -fsSL "$TEKLJER_SERVER/ci/v1/upload.sh" | sh

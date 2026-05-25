@@ -1,0 +1,22 @@
+{
+  "metadata": {
+    "display_name": "Widget Porting Toolkit",
+    "description": "Run classic Dashboard widgets from OS X 10.4 through 10.14 natively on modern macOS.",
+    "icon": ".tekljer/icon.webp",
+    "screenshots": [
+      ".github/assets/readme_screenshot.webp"
+    ],
+    "supported_platforms": {
+      "macos": "macOS 12.0 or later"
+    }
+  },
+  "job": {
+    "key": "macos-release",
+    "platform": "macos",
+    "arch": "universal",
+    "artifacts_glob": [
+      "artifacts/*.dmg",
+      "artifacts/*.zip"
+    ]
+  }
+}
