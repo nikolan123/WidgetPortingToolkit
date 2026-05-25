@@ -303,7 +303,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -e\n\nGIT_COMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
+			shellScript = "#!/bin/bash\nset -e\n\nGIT_DIR=\"${PROJECT_DIR:-$SRCROOT}\"\nGIT_COMMIT=$(git -C \"$GIT_DIR\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
 		};
 		23A7F11A2EE6374100274BFF /* Add Commit Hash to Built Info.plist */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -322,7 +322,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "#!/bin/bash\nset -e\n\nGIT_COMMIT=$(git -C \"$SRCROOT\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
+			shellScript = "#!/bin/bash\nset -e\n\nGIT_DIR=\"${PROJECT_DIR:-$SRCROOT}\"\nGIT_COMMIT=$(git -C \"$GIT_DIR\" rev-parse --short HEAD 2>/dev/null || echo Unknown)\nPLIST=\"$TARGET_BUILD_DIR/$INFOPLIST_PATH\"\n\necho \"Injecting GitCommitShort=$GIT_COMMIT into built plist at: $PLIST\"\n\n/usr/libexec/PlistBuddy -c \"Set :GitCommitShort $GIT_COMMIT\" \"$PLIST\" 2>/dev/null || \\\n/usr/libexec/PlistBuddy -c \"Add :GitCommitShort string $GIT_COMMIT\" \"$PLIST\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
