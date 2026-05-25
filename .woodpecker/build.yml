@@ -14,14 +14,6 @@ steps:
     image: bash
     commands:
       - date +%s > .tekljer_action_started_at
-      - |
-        if [ -z "$(git rev-list -n 1 HEAD --since='24 hours ago')" ]; then
-          echo "No commits in the last 24 hours, skipping build."
-          touch .tekljer_skip_upload
-          exit 0
-        else
-          echo "Commits detected, proceeding with build."
-        fi
       - xcodebuild -version
       - command -v create-dmg
       - |
