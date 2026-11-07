@@ -445,6 +445,50 @@ class WidgetManager: ObservableObject {
             return nil
         }
     }
+
+    func installWidgetSelection(from directory: URL) throws -> [String] {
+        let fm = FileManager.default
+        let widgets = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
+            .filter { $0.pathExtension.lowercased() == "wdgt" }
+        guard !widgets.isEmpty else {
+            throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "The download did not contain any widgets."])
+        }
+
+        let installed = try fm.contentsOfDirectory(at: Self.installedWidgetsDirectoryURL(), includingPropertiesForKeys: nil, options: .skipsHiddenFiles)
+        var installedIdentifiers = Set(installed.compactMap { url -> String? in
+            let name = url.lastPathComponent
+            guard let separator = name.lastIndex(of: "_") else { return nil }
+            return String(name[..<separator])
+        })
+
+        var failed: [String] = []
+        for widget in widgets {
+            // Some widgets in the selection use a lowercase plist filename.
+            let plist = widget.appendingPathComponent("Info.plist")
+            let lowercasePlist = widget.appendingPathComponent("info.plist")
+            if !fm.fileExists(atPath: plist.path), fm.fileExists(atPath: lowercasePlist.path) {
+                try fm.moveItem(at: lowercasePlist, to: plist)
+            }
+
+            guard let info = parsePlist(from: widget, showError: { _ in }),
+                  !info.bundleIdentifier.isEmpty, !info.bundleIdentifier.contains("/") else {
+                failed.append(widget.deletingPathExtension().lastPathComponent)
+                continue
+            }
+            guard !installedIdentifiers.contains(info.bundleIdentifier) else { continue }
+            guard let (destination, id) = installWidget(from: widget) else {
+                failed.append(info.displayName)
+                continue
+            }
+            if loadWidget(from: destination, openWindow: false, plistInfo: info, id: id) {
+                installedIdentifiers.insert(info.bundleIdentifier)
+            } else {
+                try fm.removeItem(at: destination)
+                failed.append(info.displayName)
+            }
+        }
+        return failed
+    }
     
     func openInstallWindow(with info: ParsedInfo, folderURL: URL) {
         var window: NSWindow? = nil
@@ -788,14 +832,15 @@ class WidgetManager: ObservableObject {
     }
 
     // widget loader
+    @discardableResult
     func loadWidget(
         from folderURL: URL,
         openWindow: Bool = true,
         plistInfo: ParsedInfo? = nil,
         id: String = String(UUID().uuidString.prefix(8))
-    ) {
+    ) -> Bool {
         let info = plistInfo ?? parsePlist(from: folderURL, showError: showError)
-        guard let plistInfo = info else { return }
+        guard let plistInfo = info else { return false }
 
         let tweaks = self.tweaks(for: plistInfo.bundleIdentifier, id: id)
 
@@ -806,13 +851,13 @@ class WidgetManager: ObservableObject {
             mainHTMLPath: plistInfo.mainHTML,
             tweaks: tweaks
         ) else {
-            return
+            return false
         }
 
         let htmlFileURL = processedFolder.appendingPathComponent(plistInfo.mainHTML)
         guard FileManager.default.fileExists(atPath: htmlFileURL.path) else {
             showError("Main HTML file “\(plistInfo.mainHTML)” not found for “\(plistInfo.displayName)”.")
-            return
+            return false
         }
 
         let newAppInfo = AppInfo(
@@ -852,6 +897,7 @@ class WidgetManager: ObservableObject {
         if openWindow {
             openHTMLWindow(appInfo: newAppInfo)
         }
+        return true
     }
 
     // Language prep

@@ -42,7 +42,7 @@ struct ContentView: View {
             } else {
                 VStack(spacing: 0) {
                     if widgetManager.appInfos.isEmpty {
-                        EmptyStateView()
+                        EmptyStateView(widgetManager: widgetManager)
                     } else {
                         ScrollView {
                             VStack(spacing: 0) {
@@ -129,22 +129,31 @@ struct ContentView: View {
 }
 
 struct EmptyStateView: View {
+    let widgetManager: WidgetManager
+
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "square.dashed.inset.filled")
-                .font(.system(size: 60))
-                .foregroundStyle(Color.secondary.opacity(0.5))
-            
-            VStack(spacing: 8) {
-                Text("No Widgets Found")
-                    .font(.system(.title2, design: .rounded).weight(.semibold))
-                
-                Text("Drop a .wdgt file here to get started")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(spacing: 20) {
+                    Image(systemName: "square.dashed.inset.filled")
+                        .font(.system(size: 60))
+                        .foregroundStyle(Color.secondary.opacity(0.5))
+
+                    VStack(spacing: 8) {
+                        Text("No Widgets Found")
+                            .font(.system(.title2, design: .rounded).weight(.semibold))
+
+                        Text("Drop a .wdgt file here to get started")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    WidgetSelectionDownloadButton(manager: widgetManager)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, minHeight: geometry.size.height)
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -112,13 +112,6 @@ struct OOBEWidgetResourcesContent: View {
             .font(.custom("Lucida Grande", size: 15))
             .buttonStyle(.bordered)
             .controlSize(.large)
-            
-            HStack {
-                Image(systemName: "shield.pattern.checkered")
-                Text("This action will connect to widgets.nikolan.net")
-            }
-            .font(.custom("Lucida Grande", size: 10))
-            .foregroundStyle(.gray)
         }
         .padding(40)
         .onAppear {
@@ -149,7 +142,7 @@ struct OOBEWidgetResourcesContent: View {
     private func startDownload() {
         guard let url = URL(string: "https://widgets.nikolan.net/WidgetResources_10.9.5.zip") else { return }
         
-        downloadAndExtractWidgetResources(from: url, statusHandler: { message in
+        downloadAndExtractZip(from: url, statusHandler: { message in
             statusMessage = message
         }, completion: { dir in
             if let dir = dir {

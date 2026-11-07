@@ -32,11 +32,19 @@ struct OOBEGetWidgetsContent: View {
                     .multilineTextAlignment(.center)
                     .foregroundColor(.primary)
                 
-                Text("Download classic Dashboard widgets to use with this app.")
+                Text("Start with a selection of classic Dashboard widgets that work well with this app.")
                     .font(.custom("Lucida Grande", size: 15))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 30)
+
+            WidgetSelectionDownloadButton(
+                manager: manager,
+                title: "Download and Install",
+                isActive: { coordinator.currentStep == .getWidgets },
+                statusFont: .custom("Lucida Grande", size: 13)
+            )
+            .font(.custom("Lucida Grande", size: 15))
                 
                 Button {
                     if let url = URL(string: widgetSourceURL) {
@@ -44,22 +52,23 @@ struct OOBEGetWidgetsContent: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "link.circle.fill")
-                        Text(widgetSourceURL)
+                        Image(systemName: "book.circle.fill")
+                        Text("Guide to Finding More Widgets")
                             .font(.custom("Lucida Grande", size: 14))
                     }
                 }
                 .buttonStyle(.link)
                 .foregroundColor(.blue)
                 
-            Text("Drag and drop .wdgt files into the app to install them.")
+            Text("To install your own widgets, drag and drop .wdgt files into the app.")
                 .font(.custom("Lucida Grande", size: 13))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 30)
                 .padding(.top, 4)
         }
-        .padding(40)
+        .padding(.horizontal, 40)
+        .padding(.vertical, 30)
     }
 }
 
