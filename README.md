@@ -8,7 +8,7 @@
 </p>
 
 <p align="center">
-  Allows you to run Dashboard widgets (OS X 10.4 - 10.14) on new macOS versions (12.0+).
+  Allows you to natively run Dashboard widgets (OS X 10.4 - 10.14) on new macOS versions (12.0+).
 </p>
 
 <img align="center" alt="Screenshot" src=".github/assets/readme_screenshot.webp">
@@ -29,13 +29,15 @@
   <a href="https://blog.nikolan.net/posts/dashboard-widgets/">Blog Post</a>
 </p>
 
-<p align="center">This is a side project made in my free time to learn Swift. Parts of the code are messy. Contributions always welcome.</p>
+## How It Works
+
+Widget Porting Toolkit recreates the parts of Dashboard that let original `.wdgt` bundles run on modern macOS. Widgets run in WebKit, where a JavaScript-to-Swift bridge reimplements key parts of the Dashboard API so they can interact with macOS. Widgets use Apple's original Widget Resources for shared styles and controls. The toolkit also recreates the full-screen Dashboard so you can grab and arrange widgets just like in OS X.
 
 ## Getting Started
 
 1. Download the latest DMG from the button above or from the [releases page](https://github.com/nikolan123/WidgetPortingToolkit/releases)
 2. Open the DMG and move Widget Porting Toolkit to your Applications folder
-3. Launch the app
+3. Launch the app and follow the first-run setup, which walks you through adding Widget Resources and widgets
 4. Drag `.wdgt` bundles into the app
 
 ## Building From Source
