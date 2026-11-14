@@ -30,6 +30,16 @@ struct WebView: NSViewRepresentable {
 
         configuration.preferences.setValue(true, forKey: "developerExtrasEnabled") // devtools
 
+        if let fontScript = DashboardFonts.styleScript(
+            for: appInfo.fontFiles,
+            in: appInfo.tempFolder,
+            localWidget: true
+        ) {
+            controller.addUserScript(
+                WKUserScript(source: fontScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            )
+        }
+
         // load preferences from UserDefaults and expose them
         let existingPrefs = (UserDefaults.standard.dictionary(forKey: namespace) ?? [:]) as NSDictionary
         let prefsData = (try? JSONSerialization.data(withJSONObject: existingPrefs, options: [])) ?? Data()

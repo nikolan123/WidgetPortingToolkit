@@ -118,7 +118,7 @@ enum WidgetExporter {
         try patchWidgetFilesForExport(in: exportFolder, mainHTMLPath: parsed.mainHTML)
 
         step("Preparing runtime JavaScript files…")
-        try writeRuntimeScripts(into: exportFolder, bundleID: parsed.bundleIdentifier)
+        try writeRuntimeScripts(into: exportFolder, parsed: parsed)
 
         step("Injecting runtime references…")
         injectRuntimeScriptReferences(
@@ -473,7 +473,7 @@ enum WidgetExporter {
         }
     }
 
-    private static func writeRuntimeScripts(into folder: URL, bundleID: String) throws {
+    private static func writeRuntimeScripts(into folder: URL, parsed: ParsedInfo) throws {
         guard let dashboard = loadBundledJS(named: "DashboardAPI"),
               let widgetShims = loadBundledJS(named: "WidgetShims"),
               let systemInject = loadBundledJS(named: "SystemInject"),
@@ -485,19 +485,20 @@ enum WidgetExporter {
 
         let dashboardPatched = dashboard
             .replacingOccurrences(of: "__WIDGET_PREFS__", with: "{}")
-            .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: "\(bundleID)_widget_export")
+            .replacingOccurrences(of: "__WIDGET_IDENTIFIER__", with: "\(parsed.bundleIdentifier)_widget_export")
         let dashboardDragRegionsPatched = dashboardDragRegions.replacingOccurrences(
             of: "__DASHBOARD_REGION_CSS__",
             with: dashboardRegionCSSJSONString(for: folder)
         )
 
+        let fontScript = DashboardFonts.styleScript(for: parsed.fontFiles, in: folder) ?? ""
         let outputs: [(String, String)] = [
             ("DashboardAPI.js", dashboardPatched),
             ("WidgetShims.js", widgetShims),
             ("SystemInject.js", systemInject),
             ("ExportRuntime.js", exportRuntime),
             ("DashboardDragRegions.js", dashboardDragRegionsPatched),
-            ("InjectCSS.js", injectCSS)
+            ("InjectCSS.js", injectCSS + "\n" + fontScript)
         ]
 
         do {

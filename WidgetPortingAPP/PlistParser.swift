@@ -20,6 +20,7 @@ struct ParsedInfo {
     let languages: [String]
     let closeBoxInsetX: CGFloat
     let closeBoxInsetY: CGFloat
+    var fontFiles: [String] = []
 }
 
 func parsePlist(from folderURL: URL, showError: (String) -> Void) -> ParsedInfo? {
@@ -93,7 +94,8 @@ func parsePlist(from folderURL: URL, showError: (String) -> Void) -> ParsedInfo?
         iconURL: iconURL,
         languages: languages,
         closeBoxInsetX: closeBoxInsetX,
-        closeBoxInsetY: closeBoxInsetY
+        closeBoxInsetY: closeBoxInsetY,
+        fontFiles: (plist["Fonts"] as? [Any])?.compactMap { $0 as? String } ?? []
     )
 }
 
