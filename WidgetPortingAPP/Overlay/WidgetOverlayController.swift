@@ -134,6 +134,7 @@ class WidgetOverlayController {
     }
     
     func handleOptionKey(held: Bool) {
+        guard !state.showInfoPopover && !state.showResizePopover else { return }
         guard let parent = parentWindow, parent.isKeyWindow else {
             if overlayWindow != nil { hideOverlay() }
             return
@@ -153,7 +154,6 @@ class WidgetOverlayController {
         overlay.ignoresMouseEvents = false
         overlay.isReleasedWhenClosed = false
         overlay.level = parent.level + 1
-        overlay.alphaValue = 0
         
         parent.addChildWindow(overlay, ordered: .above)
         overlayWindow = overlay
@@ -164,19 +164,14 @@ class WidgetOverlayController {
             self?.handleMouseEvent(event)
             return event
         }
-        
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.15
-            overlay.animator().alphaValue = 1
-        }
     }
     
     private func handleMouseEvent(_ event: NSEvent) {
-        guard let parent = parentWindow, let overlay = overlayWindow else { return }
+        guard let parent = parentWindow, let overlay = overlayWindow, event.window === overlay else { return }
         
         let mouseInScreen = overlay.convertPoint(toScreen: event.locationInWindow)
         let parentFrame = parent.frame
-        let cornerSize: CGFloat = 30
+        let cornerSize = min(32, min(parentFrame.width, parentFrame.height) / 3)
         let isInResizeCorner = mouseInScreen.x > parentFrame.maxX - cornerSize && mouseInScreen.y < parentFrame.minY + cornerSize
         
         switch event.type {
@@ -210,6 +205,7 @@ class WidgetOverlayController {
     }
     
     private func hideOverlay() {
+        guard !state.showInfoPopover && !state.showResizePopover else { return }
         guard let overlay = overlayWindow else { return }
         guard !isCleaningUp && !parentIsClosing else {
             removeOverlayWindow(overlay)
@@ -228,13 +224,7 @@ class WidgetOverlayController {
             mouseMonitor = nil
         }
         
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.15
-            overlay.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            guard let self = self, let overlay = self.overlayWindow else { return }
-            self.removeOverlayWindow(overlay)
-        })
+        removeOverlayWindow(overlay)
     }
 
     private func removeOverlayWindow(_ overlay: NSWindow) {
@@ -250,6 +240,7 @@ class WidgetOverlayController {
     
     private func updateOverlayFrame() {
         guard let parent = parentWindow, let overlay = overlayWindow else { return }
+        state.currentSize = parent.contentLayoutRect.size
         overlay.setFrame(parent.frame, display: true)
     }
     

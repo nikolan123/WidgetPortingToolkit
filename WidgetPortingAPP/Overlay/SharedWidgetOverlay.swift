@@ -32,131 +32,116 @@ struct SharedWidgetOverlay: View {
     @State private var internalIsDragging = false
     
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.7)
-                .cornerRadius(12)
-            
-            if isResizing {
-                Text("\(Int(currentSize.width)) × \(Int(currentSize.height))")
-                    .font(.system(size: 32, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white)
-            } else {
-                VStack(spacing: 8) {
-                    // Drag handle
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white.opacity(0.4))
-                        .frame(width: 40, height: 6)
-                        .padding(.vertical, 8)
-                        .contentShape(Rectangle().size(width: 60, height: 30))
-                        .gesture(
-                            DragGesture(minimumDistance: 0, coordinateSpace: useLocalCoordinates ? .local : .global)
-                                .onChanged { value in
-                                    if !internalIsDragging {
-                                        internalIsDragging = true
-                                        onDragStart()
-                                    }
-                                    onDrag(value.translation)
-                                }
-                                .onEnded { _ in
-                                    internalIsDragging = false
-                                    onDragEnd()
-                                }
-                        )
-                        .padding(.top, 8)
-                    
-                    Spacer()
-                    
-                    Text(appInfo.displayName)
-                        .font(.headline)
+        GeometryReader { geometry in
+            let compact = geometry.size.width < 164 || geometry.size.height < 224
+            let minimal = geometry.size.width < 96 || geometry.size.height < 96
+            let horizontal = geometry.size.width >= 360 && geometry.size.height >= 44 && geometry.size.height < 140
+            let cornerSize = min(32, min(geometry.size.width, geometry.size.height) / 3)
+
+            ZStack(alignment: .bottomTrailing) {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.7))
+                    .gesture(moveGesture)
+
+                if isResizing {
+                    Text("\(Int(currentSize.width)) × \(Int(currentSize.height))")
+                        .font(.system(size: compact ? 22 : 32, weight: .medium, design: .monospaced))
                         .foregroundStyle(.white)
-                    
-                    // Control buttons
-                    VStack(spacing: 8) {
-                        Button { isPinned.toggle() } label: {
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.3)
+                        .padding(8)
+                        .padding(.bottom, cornerSize)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if horizontal {
+                    ZStack(alignment: .top) {
+                        dragHandle(width: 40, height: 14)
+
+                        HStack(spacing: 12) {
+                            closeButton
+
+                            Text(appInfo.displayName)
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
                             HStack(spacing: 6) {
-                                Image(systemName: isPinned ? "pin.fill" : "pin")
-                                Text(isPinned ? "Pinned" : "Pin to Top")
+                                controls(showLabels: geometry.size.width >= 600)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(isPinned ? Color.accentColor : Color.white.opacity(0.2))
-                            .foregroundStyle(.white)
-                            .cornerRadius(6)
+                            .frame(width: geometry.size.width >= 600 ? 344 : 112)
                         }
-                        .buttonStyle(.plain)
-                        
-                        Button { showInfoPopover.toggle() } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "info.circle")
-                                Text("Info")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.2))
-                            .foregroundStyle(.white)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showInfoPopover) {
-                            OverlayInfoPopover(appInfo: appInfo, isPresented: $showInfoPopover)
-                        }
-                        
-                        Button { showResizePopover.toggle() } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                Text("Resize")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(Color.white.opacity(0.2))
-                            .foregroundStyle(.white)
-                            .cornerRadius(6)
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showResizePopover) {
-                            ResizePopover(appInfo: appInfo, widgetManager: widgetManager, liveUpdate: false)
-                        }
+                        .padding(.horizontal, 10)
+                        .padding(.top, 14)
+                        .padding(.bottom, 4)
+                        .padding(.trailing, cornerSize)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .fixedSize()
-                    .frame(width: 150)
-                    
-                    Spacer()
+                } else if minimal {
+                    Menu {
+                        Button(isPinned ? "Unpin" : "Pin to Top") { isPinned.toggle() }
+                        Button("Info") { showInfoPopover = true }
+                        Button("Resize") { showResizePopover = true }
+                        Divider()
+                        Button("Close Widget", action: onClose)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(.white)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .environment(\.colorScheme, .dark)
+                    .frame(width: min(32, geometry.size.width), height: min(24, geometry.size.height))
+                    .help("Widget controls")
+                    .accessibilityLabel("Widget controls")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } else {
+                    VStack(spacing: 0) {
+                        ZStack(alignment: .leading) {
+                            dragHandle(
+                                width: min(40, geometry.size.width - 68),
+                                height: 24
+                            )
+                            .frame(maxWidth: .infinity)
+
+                            closeButton
+                        }
+                        Spacer(minLength: 4)
+
+                        if !compact || geometry.size.height >= 140 {
+                            Text(appInfo.displayName)
+                                .font(.headline)
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.bottom, compact ? 8 : 12)
+                        }
+
+                        if compact {
+                            HStack(spacing: 4) {
+                                controls(showLabels: false)
+                            }
+                            .frame(maxWidth: 180)
+                        } else {
+                            VStack(spacing: 6) {
+                                controls(showLabels: true)
+                            }
+                            .frame(maxWidth: 150)
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(compact ? 6 : 10)
+                    .padding(.bottom, cornerSize)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            }
-            
-            // Close button
-            if !isResizing {
-                VStack {
-                    HStack {
-                        Button { onClose() } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 20))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        .buttonStyle(.plain)
-                        .padding(10)
-                        Spacer()
-                    }
-                    Spacer()
-                }
-            }
-            
-            // Resize handle
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Path { path in
-                        path.move(to: CGPoint(x: 0, y: 12))
-                        path.addLine(to: CGPoint(x: 12, y: 12))
-                        path.addLine(to: CGPoint(x: 12, y: 0))
-                    }
-                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                    .frame(width: 12, height: 12)
-                    .contentShape(Rectangle().size(width: 30, height: 30))
+
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: min(12, cornerSize / 2), weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .frame(width: cornerSize, height: cornerSize)
+                    .contentShape(Rectangle())
+                    .help("Drag to resize widget")
                     .gesture(
                         DragGesture(coordinateSpace: .global)
                             .onChanged { value in
@@ -171,9 +156,94 @@ struct SharedWidgetOverlay: View {
                                 onResizeEnd()
                             }
                     )
-                    .padding(10)
+                    .popover(isPresented: $showResizePopover) {
+                        ResizePopover(appInfo: appInfo, widgetManager: widgetManager, liveUpdate: false)
+                    }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .popover(isPresented: $showInfoPopover) {
+            OverlayInfoPopover(appInfo: appInfo, isPresented: $showInfoPopover)
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 18))
+                .frame(width: 24, height: 24)
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .buttonStyle(.plain)
+        .help("Close Widget")
+        .accessibilityLabel("Close Widget")
+    }
+
+    private func dragHandle(width: CGFloat, height: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(Color.white.opacity(0.4))
+            .frame(width: width, height: 4)
+            .frame(height: height)
+            .contentShape(Rectangle())
+            .gesture(moveGesture)
+            .help("Drag to move widget")
+    }
+
+    private var moveGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: useLocalCoordinates ? .local : .global)
+            .onChanged { value in
+                if !internalIsDragging {
+                    internalIsDragging = true
+                    onDragStart()
                 }
+                onDrag(value.translation)
+            }
+            .onEnded { _ in
+                internalIsDragging = false
+                onDragEnd()
+            }
+    }
+
+    @ViewBuilder
+    private func controls(showLabels: Bool) -> some View {
+        Button { isPinned.toggle() } label: {
+            controlLabel(isPinned ? "Pinned" : "Pin to Top", image: isPinned ? "pin.fill" : "pin", showLabels: showLabels)
+                .background(isPinned ? Color.accentColor : Color.white.opacity(0.2))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help(isPinned ? "Unpin" : "Pin to Top")
+        .accessibilityLabel(isPinned ? "Unpin" : "Pin to Top")
+
+        Button { showInfoPopover.toggle() } label: {
+            controlLabel("Info", image: "info.circle", showLabels: showLabels)
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help("Widget Info")
+        .accessibilityLabel("Widget Info")
+
+        Button { showResizePopover.toggle() } label: {
+            controlLabel("Resize", image: "arrow.up.left.and.arrow.down.right", showLabels: showLabels)
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help("Resize Widget")
+        .accessibilityLabel("Resize Widget")
+    }
+
+    private func controlLabel(_ title: String, image: String, showLabels: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: image)
+            if showLabels {
+                Text(title)
             }
         }
+        .font(.system(size: 13))
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .frame(height: 28)
     }
 }
