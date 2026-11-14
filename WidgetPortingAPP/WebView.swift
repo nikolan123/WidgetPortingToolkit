@@ -180,6 +180,7 @@ struct WebView: NSViewRepresentable {
         private var dragInitialWindowOrigin: CGPoint?
         private var dragInitialMouseLocation: CGPoint?
         private var dragEventMonitor: Any?
+        private var windowDragSource: WidgetWindowDragSource?
 
         // XHR-native management
         private lazy var xhrProxy: NativeXHRProxy? = {
@@ -296,7 +297,9 @@ struct WebView: NSViewRepresentable {
                     postCustomWindowDragNotification(.dashboardCustomWindowDragEnd)
                     callDashboardDragHook("onenddrag")
                 } else {
-                    endNativeDashboardDrag(callEndHook: true)
+                    if windowDragSource?.isDragging != true {
+                        endNativeDashboardDrag(callEndHook: true)
+                    }
                 }
 
             // --- Native XHR handlers ---
@@ -390,13 +393,20 @@ struct WebView: NSViewRepresentable {
 
             switch event.type {
             case .leftMouseDragged:
-                let mouseLocation = NSEvent.mouseLocation
-                window.setFrameOrigin(CGPoint(
-                    x: initialWindowOrigin.x + mouseLocation.x - initialMouseLocation.x,
-                    y: initialWindowOrigin.y + mouseLocation.y - initialMouseLocation.y
-                ))
+                guard windowDragSource == nil, event.window === window, let webView else { return }
+                let source = WidgetWindowDragSource(
+                    window: window,
+                    initialOrigin: initialWindowOrigin,
+                    initialMouseLocation: initialMouseLocation
+                ) { [weak self] in
+                    self?.endNativeDashboardDrag(callEndHook: true)
+                }
+                windowDragSource = source
+                source.begin(from: webView, event: event)
             case .leftMouseUp:
-                endNativeDashboardDrag(callEndHook: true)
+                if windowDragSource?.isDragging != true {
+                    endNativeDashboardDrag(callEndHook: true)
+                }
             default:
                 break
             }
@@ -405,6 +415,8 @@ struct WebView: NSViewRepresentable {
         private func endNativeDashboardDrag(callEndHook: Bool) {
             guard dragInitialWindowOrigin != nil || dragEventMonitor != nil else { return }
 
+            windowDragSource?.abandon()
+            windowDragSource = nil
             dragInitialWindowOrigin = nil
             dragInitialMouseLocation = nil
 
