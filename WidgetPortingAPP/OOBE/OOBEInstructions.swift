@@ -65,7 +65,7 @@ struct OOBEInstructionsContent: View {
                 
                 InstructionRow(
                     icon: "trash",
-                    text: "Remove widgets you no longer need with the trash button"
+                    text: "Drag widgets to the Dock's Bin or use the overlay to close them"
                 )
             }
             .padding(.horizontal, 20)
